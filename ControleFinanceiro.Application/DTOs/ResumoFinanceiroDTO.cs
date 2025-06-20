@@ -12,6 +12,8 @@ namespace ControleFinanceiro.Application.DTOs
         public decimal TotalDespesas { get; set; }
         public decimal SaldoFinal { get; set; }
         public List<TransacaoDiariaDTO> TransacoesDiarias { get; set; }
+        
+        public string Periodo => $"{DataInicio:dd/MM/yyyy} a {DataFim:dd/MM/yyyy}";
 
         public ResumoFinanceiroDTO()
         {

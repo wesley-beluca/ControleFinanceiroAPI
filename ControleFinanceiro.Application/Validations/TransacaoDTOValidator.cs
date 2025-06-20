@@ -1,40 +1,80 @@
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Domain.Entities;
+using FluentValidation;
 using System;
-using System.ComponentModel.DataAnnotations;
 
 namespace ControleFinanceiro.Application.Validations
 {
-    public static class TransacaoDTOValidator
+    public class TransacaoDTOValidator : AbstractValidator<TransacaoDTO>
     {
-        public static ValidationResult Validate(TransacaoDTO transacaoDto)
+        public TransacaoDTOValidator()
         {
-            if (string.IsNullOrWhiteSpace(transacaoDto.Descricao))
-            {
-                return new ValidationResult("A descrição da transação é obrigatória.");
-            }
+            RuleFor(x => x.Id)
+                .NotEmpty().WithMessage("O ID da transação é obrigatório.");
 
-            if (transacaoDto.Descricao.Length > 100)
-            {
-                return new ValidationResult("A descrição deve ter no máximo 100 caracteres.");
-            }
+            RuleFor(x => x.Descricao)
+                .NotEmpty().WithMessage("A descrição da transação é obrigatória.")
+                .MaximumLength(Transacao.DESCRICAO_MAX_LENGTH)
+                .WithMessage($"A descrição deve ter no máximo {Transacao.DESCRICAO_MAX_LENGTH} caracteres.");
 
-            if (transacaoDto.Valor <= 0)
-            {
-                return new ValidationResult("O valor da transação deve ser maior que zero.");
-            }
+            RuleFor(x => x.Valor)
+                .GreaterThan(0).WithMessage("O valor da transação deve ser maior que zero.");
 
-            if (string.IsNullOrWhiteSpace(transacaoDto.Tipo))
-            {
-                return new ValidationResult("O tipo da transação é obrigatório.");
-            }
+            RuleFor(x => x.Tipo)
+                .NotEmpty().WithMessage("O tipo da transação é obrigatório.")
+                .Must(tipo => Enum.IsDefined(typeof(TipoTransacao), tipo))
+                .WithMessage("O tipo da transação deve ser 0 (Despesa) ou 1 (Receita).");
 
-            if (!Enum.TryParse<TipoTransacao>(transacaoDto.Tipo, true, out _))
-            {
-                return new ValidationResult("O tipo da transação deve ser 'Receita' ou 'Despesa'.");
-            }
+            RuleFor(x => x.Data)
+                .LessThanOrEqualTo(DateTime.Now).WithMessage("Não é permitido registrar transações com data futura.")
+                .GreaterThanOrEqualTo(DateTime.Now.AddYears(-5))
+                .WithMessage("Não é permitido registrar transações com mais de 5 anos.");
+        }
+    }
 
-            return ValidationResult.Success;
+    public class CreateTransacaoDTOValidator : AbstractValidator<CreateTransacaoDTO>
+    {
+        public CreateTransacaoDTOValidator()
+        {
+            RuleFor(x => x.Descricao)
+                .NotEmpty().WithMessage("A descrição da transação é obrigatória.")
+                .MaximumLength(Transacao.DESCRICAO_MAX_LENGTH)
+                .WithMessage($"A descrição deve ter no máximo {Transacao.DESCRICAO_MAX_LENGTH} caracteres.");
+
+            RuleFor(x => x.Valor)
+                .GreaterThan(0).WithMessage("O valor da transação deve ser maior que zero.");
+
+            RuleFor(x => x.Tipo)
+                .Must(tipo => Enum.IsDefined(typeof(TipoTransacao), tipo))
+                .WithMessage("O tipo da transação deve ser 0 (Despesa) ou 1 (Receita).");
+
+            RuleFor(x => x.Data)
+                .LessThanOrEqualTo(DateTime.Now).WithMessage("Não é permitido registrar transações com data futura.")
+                .GreaterThanOrEqualTo(DateTime.Now.AddYears(-5))
+                .WithMessage("Não é permitido registrar transações com mais de 5 anos.");
+        }
+    }
+    
+    public class UpdateTransacaoDTOValidator : AbstractValidator<UpdateTransacaoDTO>
+    {
+        public UpdateTransacaoDTOValidator()
+        {
+            RuleFor(x => x.Descricao)
+                .NotEmpty().WithMessage("A descrição da transação é obrigatória.")
+                .MaximumLength(Transacao.DESCRICAO_MAX_LENGTH)
+                .WithMessage($"A descrição deve ter no máximo {Transacao.DESCRICAO_MAX_LENGTH} caracteres.");
+
+            RuleFor(x => x.Valor)
+                .GreaterThan(0).WithMessage("O valor da transação deve ser maior que zero.");
+
+            RuleFor(x => x.Tipo)
+                .Must(tipo => Enum.IsDefined(typeof(TipoTransacao), tipo))
+                .WithMessage("O tipo da transação deve ser 0 (Despesa) ou 1 (Receita).");
+
+            RuleFor(x => x.Data)
+                .LessThanOrEqualTo(DateTime.Now).WithMessage("Não é permitido registrar transações com data futura.")
+                .GreaterThanOrEqualTo(DateTime.Now.AddYears(-5))
+                .WithMessage("Não é permitido registrar transações com mais de 5 anos.");
         }
     }
 } 

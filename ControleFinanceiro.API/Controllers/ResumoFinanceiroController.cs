@@ -1,5 +1,6 @@
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
+using ControleFinanceiro.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
@@ -18,15 +19,12 @@ namespace ControleFinanceiro.API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<ResumoFinanceiroDTO>> GetResumoFinanceiro(
+        public async Task<ActionResult<Result<ResumoFinanceiroDTO>>> GetResumoFinanceiro(
             [FromQuery] DateTime dataInicio, 
             [FromQuery] DateTime dataFim)
         {
-            if (dataInicio > dataFim)
-                return BadRequest("A data de início deve ser anterior ou igual à data de fim");
-
-            var resumo = await _resumoFinanceiroService.GerarResumoFinanceiroAsync(dataInicio, dataFim);
-            return Ok(resumo);
+            var resultado = await _resumoFinanceiroService.GerarResumoFinanceiroAsync(dataInicio, dataFim);
+            return Ok(resultado);
         }
     }
 } 
