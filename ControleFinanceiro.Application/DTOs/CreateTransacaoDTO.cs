@@ -1,11 +1,9 @@
-using ControleFinanceiro.Domain.Entities;
 using System;
 
 namespace ControleFinanceiro.Application.DTOs
 {
-    public class TransacaoDTO
+    public class CreateTransacaoDTO
     {
-        public Guid Id { get; set; }
         public int Tipo { get; set; }
         public DateTime Data { get; set; }
         public string Descricao { get; set; }

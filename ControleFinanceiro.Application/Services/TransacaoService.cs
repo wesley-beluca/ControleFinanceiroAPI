@@ -3,9 +3,9 @@ using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Application.Validations;
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces.Repositories;
+using FluentValidation;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -14,112 +14,254 @@ namespace ControleFinanceiro.Application.Services
     public class TransacaoService : ITransacaoService
     {
         private readonly ITransacaoRepository _transacaoRepository;
+        private readonly TransacaoDTOValidator _transacaoValidator;
+        private readonly CreateTransacaoDTOValidator _createTransacaoValidator;
 
-        public TransacaoService(ITransacaoRepository transacaoRepository)
+        public TransacaoService(
+            ITransacaoRepository transacaoRepository,
+            TransacaoDTOValidator transacaoValidator,
+            CreateTransacaoDTOValidator createTransacaoValidator)
         {
             _transacaoRepository = transacaoRepository;
+            _transacaoValidator = transacaoValidator;
+            _createTransacaoValidator = createTransacaoValidator;
         }
 
-        public async Task<TransacaoDTO> GetByIdAsync(Guid id)
+        public async Task<Result<TransacaoDTO>> GetByIdAsync(Guid id)
         {
-            var transacao = await _transacaoRepository.GetByIdAsync(id);
-            if (transacao == null) return null;
+            Transacao transacao = await _transacaoRepository.GetByIdAsync(id);
+            if (transacao == null)
+                return Result<TransacaoDTO>.Fail("Transação não encontrada");
 
-            return new TransacaoDTO
+            TransacaoDTO transacaoDto = new TransacaoDTO
             {
                 Id = transacao.Id,
-                Tipo = transacao.Tipo.ToString(),
+                Tipo = (int)transacao.Tipo,
                 Data = transacao.Data,
                 Descricao = transacao.Descricao,
                 Valor = transacao.Valor
             };
+
+            return Result<TransacaoDTO>.Ok(transacaoDto);
         }
 
-        public async Task<IEnumerable<TransacaoDTO>> GetAllAsync()
+        public async Task<Result<IEnumerable<TransacaoDTO>>> GetAllAsync()
         {
-            var transacoes = await _transacaoRepository.GetAllAsync();
-            return transacoes.Select(t => new TransacaoDTO
+            IEnumerable<Transacao> transacoes = await _transacaoRepository.GetAllAsync();
+            
+            IEnumerable<TransacaoDTO> transacoesDto = transacoes.Select(t => new TransacaoDTO
             {
                 Id = t.Id,
-                Tipo = t.Tipo.ToString(),
+                Tipo = (int)t.Tipo,
                 Data = t.Data,
                 Descricao = t.Descricao,
                 Valor = t.Valor
             });
+
+            return Result<IEnumerable<TransacaoDTO>>.Ok(transacoesDto);
         }
 
-        public async Task<IEnumerable<TransacaoDTO>> GetByPeriodoAsync(DateTime dataInicio, DateTime dataFim)
+        public async Task<Result<IEnumerable<TransacaoDTO>>> GetByPeriodoAsync(DateTime dataInicio, DateTime dataFim)
         {
-            var transacoes = await _transacaoRepository.GetByPeriodoAsync(dataInicio, dataFim);
-            return transacoes.Select(t => new TransacaoDTO
+            // Validação das datas
+            if (dataInicio > dataFim)
+                return Result<IEnumerable<TransacaoDTO>>.Fail("A data inicial não pode ser maior que a data final");
+
+            // Limitar o período de consulta para evitar sobrecarga
+            if ((dataFim - dataInicio).TotalDays > 366)
+                return Result<IEnumerable<TransacaoDTO>>.Fail("O período de consulta não pode ser maior que 1 ano");
+
+            IEnumerable<Transacao> transacoes = await _transacaoRepository.GetByPeriodoAsync(dataInicio, dataFim);
+            
+            IEnumerable<TransacaoDTO> transacoesDto = transacoes.Select(t => new TransacaoDTO
             {
                 Id = t.Id,
-                Tipo = t.Tipo.ToString(),
+                Tipo = (int)t.Tipo,
                 Data = t.Data,
                 Descricao = t.Descricao,
                 Valor = t.Valor
             });
+
+            return Result<IEnumerable<TransacaoDTO>>.Ok(transacoesDto);
         }
 
-        public async Task<IEnumerable<TransacaoDTO>> GetByTipoAsync(string tipo)
+        public async Task<Result<IEnumerable<TransacaoDTO>>> GetByTipoAsync(int tipo)
         {
-            if (!Enum.TryParse<TipoTransacao>(tipo, true, out var tipoEnum))
-                throw new ArgumentException("Tipo de transação inválido");
+            if (!Enum.IsDefined(typeof(TipoTransacao), tipo))
+                return Result<IEnumerable<TransacaoDTO>>.Fail("Tipo de transação inválido. Use 0 para Despesa ou 1 para Receita");
 
-            var transacoes = await _transacaoRepository.GetByTipoAsync(tipoEnum);
-            return transacoes.Select(t => new TransacaoDTO
+            IEnumerable<Transacao> transacoes = await _transacaoRepository.GetByTipoAsync((TipoTransacao)tipo);
+            
+            IEnumerable<TransacaoDTO> transacoesDto = transacoes.Select(t => new TransacaoDTO
             {
                 Id = t.Id,
-                Tipo = t.Tipo.ToString(),
+                Tipo = (int)t.Tipo,
                 Data = t.Data,
                 Descricao = t.Descricao,
                 Valor = t.Valor
             });
+
+            return Result<IEnumerable<TransacaoDTO>>.Ok(transacoesDto);
         }
 
-        public async Task<Guid> AddAsync(TransacaoDTO transacaoDto)
+        public async Task<Result<Guid>> AddAsync(TransacaoDTO transacaoDto)
         {
-            var validationResult = TransacaoDTOValidator.Validate(transacaoDto);
-            if (validationResult != ValidationResult.Success)
-                throw new ArgumentException(validationResult.ErrorMessage);
+            // Validação do DTO usando FluentValidation
+            var validationResult = _transacaoValidator.Validate(transacaoDto);
+            if (!validationResult.IsValid)
+            {
+                List<string> errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return Result<Guid>.Fail(errors);
+            }
 
-            if (!Enum.TryParse<TipoTransacao>(transacaoDto.Tipo, true, out var tipoEnum))
-                throw new ArgumentException("Tipo de transação inválido");
+            // Validação do tipo de transação
+            if (!Enum.IsDefined(typeof(TipoTransacao), transacaoDto.Tipo))
+                return Result<Guid>.Fail("Tipo de transação inválido. Use 0 para Despesa ou 1 para Receita");
 
-            var transacao = new Transacao(
-                tipoEnum,
-                transacaoDto.Data,
-                transacaoDto.Descricao,
-                transacaoDto.Valor
-            );
+            try
+            {
+                // Criação da entidade com validações internas
+                Transacao transacao = new Transacao(
+                    (TipoTransacao)transacaoDto.Tipo,
+                    transacaoDto.Data,
+                    transacaoDto.Descricao,
+                    transacaoDto.Valor
+                );
 
-            return await _transacaoRepository.AddAsync(transacao);
+                // Persistência
+                Guid id = await _transacaoRepository.AddAsync(transacao);
+                return Result<Guid>.Ok(id, "Transação cadastrada com sucesso");
+            }
+            catch (ArgumentException ex)
+            {
+                return Result<Guid>.Fail(ex.Message);
+            }
+            catch (Exception)
+            {
+                return Result<Guid>.Fail("Ocorreu um erro ao cadastrar a transação");
+            }
         }
 
-        public async Task UpdateAsync(TransacaoDTO transacaoDto)
+        public async Task<Result<Guid>> AddAsync(CreateTransacaoDTO transacaoDto)
         {
-            var validationResult = TransacaoDTOValidator.Validate(transacaoDto);
-            if (validationResult != ValidationResult.Success)
-                throw new ArgumentException(validationResult.ErrorMessage);
+            // Validação do DTO usando FluentValidation
+            var validationResult = _createTransacaoValidator.Validate(transacaoDto);
+            if (!validationResult.IsValid)
+            {
+                List<string> errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return Result<Guid>.Fail(errors);
+            }
 
-            if (!Enum.TryParse<TipoTransacao>(transacaoDto.Tipo, true, out var tipoEnum))
-                throw new ArgumentException("Tipo de transação inválido");
+            // Validação do tipo de transação
+            if (!Enum.IsDefined(typeof(TipoTransacao), transacaoDto.Tipo))
+                return Result<Guid>.Fail("Tipo de transação inválido. Use 0 para Despesa ou 1 para Receita");
 
-            var transacao = await _transacaoRepository.GetByIdAsync(transacaoDto.Id);
-            if (transacao == null)
-                throw new KeyNotFoundException($"Transação com ID {transacaoDto.Id} não encontrada");
+            try
+            {
+                // Criação da entidade com validações internas
+                Transacao transacao = new Transacao(
+                    (TipoTransacao)transacaoDto.Tipo,
+                    transacaoDto.Data,
+                    transacaoDto.Descricao,
+                    transacaoDto.Valor
+                );
 
-            transacao.Tipo = tipoEnum;
-            transacao.Data = transacaoDto.Data;
-            transacao.Descricao = transacaoDto.Descricao;
-            transacao.Valor = transacaoDto.Valor;
-
-            await _transacaoRepository.UpdateAsync(transacao);
+                // Persistência
+                Guid id = await _transacaoRepository.AddAsync(transacao);
+                return Result<Guid>.Ok(id, "Transação cadastrada com sucesso");
+            }
+            catch (ArgumentException ex)
+            {
+                return Result<Guid>.Fail(ex.Message);
+            }
+            catch (Exception)
+            {
+                return Result<Guid>.Fail("Ocorreu um erro ao cadastrar a transação");
+            }
         }
 
-        public async Task DeleteAsync(Guid id)
+        public async Task<Result<bool>> UpdateAsync(TransacaoDTO transacaoDto)
         {
-            await _transacaoRepository.DeleteAsync(id);
+            // Validação do DTO usando FluentValidation
+            var validationResult = _transacaoValidator.Validate(transacaoDto);
+            if (!validationResult.IsValid)
+            {
+                List<string> errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return Result<bool>.Fail(errors);
+            }
+
+            // Validação do tipo de transação
+            if (!Enum.IsDefined(typeof(TipoTransacao), transacaoDto.Tipo))
+                return Result<bool>.Fail("Tipo de transação inválido. Use 0 para Despesa ou 1 para Receita");
+
+            try
+            {
+                // Busca a entidade
+                Transacao transacao = await _transacaoRepository.GetByIdAsync(transacaoDto.Id);
+                if (transacao == null)
+                    return Result<bool>.Fail($"Transação com ID {transacaoDto.Id} não encontrada");
+
+                // Atualiza os dados da transação de forma mais limpa
+                Result<bool> resultadoAtualizacao = AtualizarDadosTransacao(transacao, transacaoDto);
+                if (!resultadoAtualizacao.Success)
+                    return resultadoAtualizacao;
+
+                // Persistência
+                await _transacaoRepository.UpdateAsync(transacao);
+                return Result<bool>.Ok(true, "Transação atualizada com sucesso");
+            }
+            catch (Exception ex)
+            {
+                return Result<bool>.Fail($"Erro ao atualizar transação: {ex.Message}");
+            }
+        }
+
+        private Result<bool> AtualizarDadosTransacao(Transacao transacao, TransacaoDTO transacaoDto)
+        {
+            List<string> errors = new List<string>();
+
+            // Método auxiliar para executar uma ação e capturar exceções
+            void ExecutarAcaoSegura(Action acao, string contexto)
+            {
+                try
+                {
+                    acao();
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{contexto}: {ex.Message}");
+                }
+            }
+
+            ExecutarAcaoSegura(() => transacao.SetTipo((TipoTransacao)transacaoDto.Tipo), "Tipo");
+            ExecutarAcaoSegura(() => transacao.SetData(transacaoDto.Data), "Data");
+            ExecutarAcaoSegura(() => transacao.SetDescricao(transacaoDto.Descricao), "Descrição");
+            ExecutarAcaoSegura(() => transacao.SetValor(transacaoDto.Valor), "Valor");
+
+            if (errors.Count > 0)
+                return Result<bool>.Fail(errors);
+
+            transacao.AtualizarDataModificacao();
+            return Result<bool>.Ok(true);
+        }
+
+        public async Task<Result<bool>> DeleteAsync(Guid id)
+        {
+            try
+            {
+                // Verifica se a transação existe
+                Transacao transacao = await _transacaoRepository.GetByIdAsync(id);
+                if (transacao == null)
+                    return Result<bool>.Fail($"Transação com ID {id} não encontrada");
+
+                // Persistência
+                await _transacaoRepository.DeleteAsync(id);
+                return Result<bool>.Ok(true, "Transação excluída com sucesso");
+            }
+            catch (Exception ex)
+            {
+                return Result<bool>.Fail($"Erro ao excluir transação: {ex.Message}");
+            }
         }
     }
 } 

@@ -1,5 +1,6 @@
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
+using ControleFinanceiro.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -19,98 +20,65 @@ namespace ControleFinanceiro.API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<TransacaoDTO>>> GetAll()
+        public async Task<ActionResult<Result<IEnumerable<TransacaoDTO>>>> GetAll()
         {
-            var transacoes = await _transacaoService.GetAllAsync();
-            return Ok(transacoes);
+            var result = await _transacaoService.GetAllAsync();
+            return Ok(result);
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<TransacaoDTO>> GetById(Guid id)
+        public async Task<ActionResult<Result<TransacaoDTO>>> GetById(Guid id)
         {
-            var transacao = await _transacaoService.GetByIdAsync(id);
-            if (transacao == null)
-                return NotFound();
-
-            return Ok(transacao);
+            var result = await _transacaoService.GetByIdAsync(id);
+            return Ok(result);
         }
 
         [HttpGet("periodo")]
-        public async Task<ActionResult<IEnumerable<TransacaoDTO>>> GetByPeriodo(
+        public async Task<ActionResult<Result<IEnumerable<TransacaoDTO>>>> GetByPeriodo(
             [FromQuery] DateTime dataInicio, 
             [FromQuery] DateTime dataFim)
         {
-            var transacoes = await _transacaoService.GetByPeriodoAsync(dataInicio, dataFim);
-            return Ok(transacoes);
+            var result = await _transacaoService.GetByPeriodoAsync(dataInicio, dataFim);
+            return Ok(result);
         }
 
         [HttpGet("tipo/{tipo}")]
-        public async Task<ActionResult<IEnumerable<TransacaoDTO>>> GetByTipo(string tipo)
+        public async Task<ActionResult<Result<IEnumerable<TransacaoDTO>>>> GetByTipo(int tipo)
         {
-            try
-            {
-                var transacoes = await _transacaoService.GetByTipoAsync(tipo);
-                return Ok(transacoes);
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(ex.Message);
-            }
+            var result = await _transacaoService.GetByTipoAsync(tipo);
+            return Ok(result);
         }
 
         [HttpPost]
-        public async Task<ActionResult<Guid>> Create([FromBody] TransacaoDTO transacaoDto)
+        public async Task<ActionResult<Result<Guid>>> Create([FromBody] CreateTransacaoDTO transacaoDto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            try
-            {
-                var id = await _transacaoService.AddAsync(transacaoDto);
-                return CreatedAtAction(nameof(GetById), new { id }, id);
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(ex.Message);
-            }
+            var result = await _transacaoService.AddAsync(transacaoDto);
+            return result.Success 
+                ? CreatedAtAction(nameof(GetById), new { id = result.Data }, result)
+                : BadRequest(result);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(Guid id, [FromBody] TransacaoDTO transacaoDto)
+        public async Task<ActionResult<Result<bool>>> Update(Guid id, [FromBody] TransacaoDTO transacaoDto)
         {
             if (id != transacaoDto.Id)
-                return BadRequest("O ID da transação não corresponde ao ID da URL");
+                return BadRequest(new { Success = false, Message = "O ID da transação não corresponde ao ID da URL" });
 
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            try
-            {
-                await _transacaoService.UpdateAsync(transacaoDto);
-                return NoContent();
-            }
-            catch (KeyNotFoundException)
-            {
-                return NotFound();
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(ex.Message);
-            }
+            var result = await _transacaoService.UpdateAsync(transacaoDto);
+            return Ok(result);
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(Guid id)
+        public async Task<ActionResult<Result<bool>>> Delete(Guid id)
         {
-            try
-            {
-                await _transacaoService.DeleteAsync(id);
-                return NoContent();
-            }
-            catch (Exception)
-            {
-                return NotFound();
-            }
+            var result = await _transacaoService.DeleteAsync(id);
+            return Ok(result);
         }
     }
 } 

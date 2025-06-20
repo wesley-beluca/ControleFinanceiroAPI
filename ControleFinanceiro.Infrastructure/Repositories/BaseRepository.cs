@@ -31,7 +31,7 @@ namespace ControleFinanceiro.Infrastructure.Repositories
         public virtual async Task<Guid> AddAsync(T entity)
         {
             await _dbSet.AddAsync(entity);
-            await _context.SaveChangesAsync();
+            await SaveChangesAsync();
             
             // Assumindo que a entidade tem uma propriedade Id
             var idProperty = entity.GetType().GetProperty("Id");
@@ -41,7 +41,7 @@ namespace ControleFinanceiro.Infrastructure.Repositories
         public virtual async Task UpdateAsync(T entity)
         {
             _dbSet.Update(entity);
-            await _context.SaveChangesAsync();
+            await SaveChangesAsync();
         }
 
         public virtual async Task DeleteAsync(Guid id)
@@ -50,8 +50,13 @@ namespace ControleFinanceiro.Infrastructure.Repositories
             if (entity != null)
             {
                 _dbSet.Remove(entity);
-                await _context.SaveChangesAsync();
+                await SaveChangesAsync();
             }
+        }
+
+        public virtual async Task<bool> SaveChangesAsync()
+        {
+            return await _context.SaveChangesAsync() > 0;
         }
     }
 } 

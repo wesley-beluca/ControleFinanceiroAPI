@@ -36,6 +36,14 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+// Verifica se estamos em ambiente Docker (variável de ambiente definida no docker-compose)
+bool isDocker = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"));
+if (!isDocker)
+{
+    // Só usa HTTPS redirection quando não estiver no Docker
+    app.UseHttpsRedirection();
+}
+
 app.UseCors("AllowVueApp");
 
 app.UseAuthorization();
