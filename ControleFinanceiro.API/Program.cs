@@ -29,10 +29,12 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c => 
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Controle Financeiro API v1");
+        c.RoutePrefix = string.Empty; // Define o Swagger UI como página inicial
+    });
 }
-
-app.UseHttpsRedirection();
 
 app.UseCors("AllowVueApp");
 
