@@ -62,15 +62,12 @@ namespace ControleFinanceiro.API.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<Result<bool>>> Update(Guid id, [FromBody] TransacaoDTO transacaoDto)
+        public async Task<ActionResult<Result<bool>>> Update(Guid id, [FromBody] UpdateTransacaoDTO transacaoDto)
         {
-            if (id != transacaoDto.Id)
-                return BadRequest(new { Success = false, Message = "O ID da transação não corresponde ao ID da URL" });
-
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var result = await _transacaoService.UpdateAsync(transacaoDto);
+            var result = await _transacaoService.UpdateAsync(id, transacaoDto);
             return Ok(result);
         }
 

@@ -3,30 +3,22 @@ using System.Collections.Generic;
 
 namespace ControleFinanceiro.Domain.Entities
 {
-    public class Transacao
+    public class Transacao : Entity
     {
         public const int DESCRICAO_MAX_LENGTH = 200;
         
-        public Guid Id { get; private set; }
         public TipoTransacao Tipo { get; private set; }
         public DateTime Data { get; private set; }
         public string Descricao { get; private set; }
         public decimal Valor { get; private set; }
-        public DateTime DataCriacao { get; private set; }
-        public DateTime? DataAtualizacao { get; private set; }
 
         // Construtor para EF Core
-        protected Transacao() 
+        protected Transacao() : base()
         {
-            Id = Guid.NewGuid();
-            DataCriacao = DateTime.Now;
         }
 
-        public Transacao(TipoTransacao tipo, DateTime data, string descricao, decimal valor)
+        public Transacao(TipoTransacao tipo, DateTime data, string descricao, decimal valor) : base()
         {
-            Id = Guid.NewGuid();
-            DataCriacao = DateTime.Now;
-            
             // Validações via métodos
             SetTipo(tipo);
             SetData(data);
@@ -44,6 +36,7 @@ namespace ControleFinanceiro.Domain.Entities
             }
             
             Tipo = tipo;
+            AtualizarDataModificacao();
         }
 
         public void SetData(DateTime data)
@@ -61,6 +54,7 @@ namespace ControleFinanceiro.Domain.Entities
             }
             
             Data = data;
+            AtualizarDataModificacao();
         }
 
         public void SetDescricao(string descricao)
@@ -77,6 +71,7 @@ namespace ControleFinanceiro.Domain.Entities
             }
             
             Descricao = descricao.Trim();
+            AtualizarDataModificacao();
         }
 
         public void SetValor(decimal valor)
@@ -88,11 +83,7 @@ namespace ControleFinanceiro.Domain.Entities
             }
             
             Valor = valor;
-        }
-
-        public void AtualizarDataModificacao()
-        {
-            DataAtualizacao = DateTime.Now;
+            AtualizarDataModificacao();
         }
     }
 } 

@@ -37,6 +37,7 @@ namespace ControleFinanceiro.Infrastructure.IoC
             // Validadores
             services.AddScoped<TransacaoDTOValidator>();
             services.AddScoped<CreateTransacaoDTOValidator>();
+            services.AddScoped<UpdateTransacaoDTOValidator>();
 
             return services;
         }
