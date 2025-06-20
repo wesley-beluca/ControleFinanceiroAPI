@@ -33,10 +33,16 @@ namespace ControleFinanceiro.Application.Services
                 // Buscar todas as transações no período
                 var transacoesPeriodo = await _transacaoRepository.GetByPeriodoAsync(dataInicio, dataFim);
                 
+                // Filtrar transações excluídas (garantia extra, já que o repositório deve aplicar o filtro)
+                transacoesPeriodo = transacoesPeriodo.Where(t => !t.Excluido).ToList();
+                
                 // Calcular saldo anterior (todas as transações antes da data de início)
                 var transacoesAnteriores = await _transacaoRepository.GetByPeriodoAsync(
                     DateTime.MinValue, 
                     dataInicio.AddDays(-1));
+                
+                // Filtrar transações excluídas do período anterior também
+                transacoesAnteriores = transacoesAnteriores.Where(t => !t.Excluido).ToList();
 
                 decimal saldoAnterior = CalcularSaldo(transacoesAnteriores);
                 

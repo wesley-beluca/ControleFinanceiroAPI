@@ -81,7 +81,7 @@ namespace ControleFinanceiro.Application.Services
         public async Task<Result<Guid>> AddAsync(CreateTransacaoDTO transacaoDto)
         {
             // Validação do DTO usando FluentValidation
-            var validationResult = _createTransacaoValidator.Validate(transacaoDto);
+            var validationResult = await _createTransacaoValidator.ValidateAsync(transacaoDto);
             if (!validationResult.IsValid)
             {
                 List<string> errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
@@ -119,7 +119,7 @@ namespace ControleFinanceiro.Application.Services
         public async Task<Result<bool>> UpdateAsync(Guid id, UpdateTransacaoDTO transacaoDto)
         {
             // Validação do DTO usando FluentValidation
-            var validationResult = _updateTransacaoValidator.Validate(transacaoDto);
+            var validationResult = await _updateTransacaoValidator.ValidateAsync(transacaoDto);
             if (!validationResult.IsValid)
             {
                 List<string> errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
