@@ -22,9 +22,21 @@ namespace ControleFinanceiro.Infrastructure.Services
         {
             _configuration = configuration;
             _smtpServer = _configuration["Email:SmtpServer"];
-            _smtpPort = int.Parse(_configuration["Email:SmtpPort"]);
+            
+            if (!int.TryParse(_configuration["Email:SmtpPort"], out int smtpPort))
+            {
+                throw new ArgumentException("SMTP Port is not configured or is invalid");
+            }
+            _smtpPort = smtpPort;
+            
             _smtpUsername = _configuration["Email:SmtpUsername"];
             _smtpPassword = _configuration["Email:SmtpPassword"];
+            
+            if (string.IsNullOrEmpty(_smtpPassword))
+            {
+                throw new ArgumentException("SMTP Password is not configured. Please set it in user secrets (development) or environment variables (production)");
+            }
+            
             _emailRemetente = _configuration["Email:EmailRemetente"];
             _nomeRemetente = _configuration["Email:NomeRemetente"];
             _baseUrl = _configuration["BaseUrl"];
@@ -75,9 +87,9 @@ namespace ControleFinanceiro.Infrastructure.Services
                 <style>
                     body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
                     .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                    .header {{ background-color: #4CAF50; color: white; padding: 10px; text-align: center; }}
+                    .header {{ background-color: #3b82f6; color: white; padding: 10px; text-align: center; }}
                     .content {{ padding: 20px; background-color: #f9f9f9; }}
-                    .button {{ background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; }}
+                    .button {{ background-color: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; }}
                     .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #777; }}
                 </style>
             </head>

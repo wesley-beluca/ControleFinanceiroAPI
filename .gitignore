@@ -173,3 +173,7 @@ MigrationBackup/
 
 # Mono auto generated files
 mono_crash.* 
+
+# Arquivos de ambiente com credenciais sensíveis
+.env
+.env.*

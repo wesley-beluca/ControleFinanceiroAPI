@@ -13,6 +13,20 @@ services:
       - ASPNETCORE_URLS=http://+:80
       - DOTNET_RUNNING_IN_CONTAINER=true
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ControleFinanceiroDB;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      # Configurações de Email
+      - Email__SmtpServer=${SMTP_SERVER:-smtp.gmail.com}
+      - Email__SmtpPort=${SMTP_PORT:-587}
+      - Email__SmtpUsername=${SMTP_USERNAME:-enviodeemail673@gmail.com}
+      - Email__EmailRemetente=${EMAIL_REMETENTE:-enviodeemail673@gmail.com}
+      - Email__NomeRemetente=${NOME_REMETENTE:-Controle Financeiro}
+      - Email__SmtpPassword=${SMTP_PASSWORD}
+      # Configurações JWT
+      - Jwt__Key=${JWT_KEY:-ChaveSeguraParaGeracaoTokensJWT}
+      - Jwt__Issuer=ControleFinanceiroAPI
+      - Jwt__Audience=ControleFinanceiroApp
+      - Jwt__ExpiryInDays=7
+      # URL Base para links em emails
+      - BaseUrl=http://localhost:8080
     depends_on:
       - sqlserver
     networks:
