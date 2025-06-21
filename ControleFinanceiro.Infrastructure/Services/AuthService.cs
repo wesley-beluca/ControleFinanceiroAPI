@@ -1,10 +1,12 @@
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
@@ -15,11 +17,13 @@ namespace ControleFinanceiro.Infrastructure.Services
     {
         private readonly IUsuarioRepository _usuarioRepository;
         private readonly IConfiguration _configuration;
+        private readonly UserManager<Usuario> _userManager;
 
-        public AuthService(IUsuarioRepository usuarioRepository, IConfiguration configuration)
+        public AuthService(IUsuarioRepository usuarioRepository, IConfiguration configuration, UserManager<Usuario> userManager)
         {
             _usuarioRepository = usuarioRepository;
             _configuration = configuration;
+            _userManager = userManager;
         }
 
         public async Task<(string token, Usuario usuario)> AuthenticateAsync(string username, string password)
@@ -28,23 +32,23 @@ namespace ControleFinanceiro.Infrastructure.Services
 
             if (usuario == null || !usuario.VerificarSenha(password))
                 return (null, null);
-
+                
             var token = GerarJwtToken(usuario);
             return (token, usuario);
         }
 
         public async Task<(bool sucesso, string mensagem, Usuario usuario)> RegisterAsync(string username, string email, string password)
         {
-            // Verificar se o username já existe
-            if (await _usuarioRepository.ExisteUsernameAsync(username))
-                return (false, "Nome de usuário já está em uso", null);
-
-            // Verificar se o email já existe
-            if (await _usuarioRepository.ExisteEmailAsync(email))
-                return (false, "Email já está em uso", null);
-
             try
             {
+                // Verificar se o username já existe
+                if (await _usuarioRepository.ExisteUsernameAsync(username))
+                    return (false, "Nome de usuário já está em uso", null);
+
+                // Verificar se o email já existe
+                if (await _usuarioRepository.ExisteEmailAsync(email))
+                    return (false, "Email já está em uso", null);
+
                 var novoUsuario = new Usuario(username, email, password);
                 await _usuarioRepository.AdicionarAsync(novoUsuario);
                 return (true, "Usuário registrado com sucesso", novoUsuario);
@@ -52,10 +56,6 @@ namespace ControleFinanceiro.Infrastructure.Services
             catch (ArgumentException ex)
             {
                 return (false, ex.Message, null);
-            }
-            catch (Exception)
-            {
-                return (false, "Erro ao registrar usuário", null);
             }
         }
 
@@ -65,8 +65,9 @@ namespace ControleFinanceiro.Infrastructure.Services
             if (usuario == null)
                 return (false, "Email não encontrado", null, null);
 
-            // Gerar token para reset de senha
             var token = usuario.GerarTokenResetSenha();
+            usuario.ResetPasswordToken = token;
+            usuario.ResetPasswordTokenExpiration = DateTime.Now.AddHours(2);
             await _usuarioRepository.AtualizarAsync(usuario);
 
             return (true, "Token de redefinição de senha gerado com sucesso", usuario, token);
@@ -74,10 +75,16 @@ namespace ControleFinanceiro.Infrastructure.Services
 
         public async Task<(bool sucesso, string mensagem)> ResetSenhaAsync(string token, string novaSenha)
         {
+            // Primeiro tentamos obter o usuário pelo token armazenado na entidade
             var usuario = await _usuarioRepository.ObterPorResetTokenAsync(token);
             if (usuario == null)
                 return (false, "Token inválido");
 
+            // Verificamos se o token está expirado
+            if (usuario.ResetPasswordTokenExpiration < DateTime.Now)
+                return (false, "Token expirado");
+
+            // Usamos o UserManager para resetar a senha
             if (!usuario.RedefinirSenha(token, novaSenha))
                 return (false, "Token expirado ou inválido");
 
@@ -95,7 +102,7 @@ namespace ControleFinanceiro.Infrastructure.Services
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
-                new Claim(ClaimTypes.Name, usuario.Username),
+                new Claim(ClaimTypes.Name, usuario.UserName),
                 new Claim(ClaimTypes.Email, usuario.Email),
                 new Claim(ClaimTypes.Role, usuario.Role)
             };

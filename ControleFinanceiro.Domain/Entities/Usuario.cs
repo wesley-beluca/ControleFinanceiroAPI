@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using System;
 using System.Security.Cryptography;
 using System.Text;
@@ -7,36 +8,39 @@ namespace ControleFinanceiro.Domain.Entities
     /// <summary>
     /// Entidade que representa um usuário do sistema
     /// </summary>
-    public class Usuario : Entity
+    public class Usuario : IdentityUser<Guid>
     {
         public const int USERNAME_MIN_LENGTH = 3;
         public const int USERNAME_MAX_LENGTH = 50;
         public const int PASSWORD_MIN_LENGTH = 6;
         public const int EMAIL_MAX_LENGTH = 100;
 
-        public string Username { get; private set; }
-        public string Email { get; private set; }
-        public string PasswordHash { get; private set; }
-        public string Role { get; private set; }
-        public string ResetPasswordToken { get; private set; }
-        public DateTime? ResetPasswordTokenExpiration { get; private set; }
+        public string Role { get; set; }
+        
+        public DateTime DataInclusao { get; set; }
+        public DateTime? DataAlteracao { get; set; }
+        public bool Excluido { get; set; }
+        public string ResetPasswordToken { get; set; }
+        public DateTime? ResetPasswordTokenExpiration { get; set; }
 
-        // Construtor protegido para EF Core
-        protected Usuario() : base() { }
+        public Usuario() { }
 
         /// <summary>
         /// Cria um novo usuário
         /// </summary>
-        public Usuario(string username, string email, string password, string role = "User") : base()
+        public Usuario(string username, string email, string password, string role = "User")
         {
             ValidarUsername(username);
             ValidarEmail(email);
             ValidarPassword(password);
 
-            Username = username;
+            UserName = username;
             Email = email;
             PasswordHash = GerarHash(password);
             Role = role;
+            Id = Guid.NewGuid();
+            DataInclusao = DateTime.Now;
+            Excluido = false;
         }
 
         /// <summary>
@@ -47,9 +51,9 @@ namespace ControleFinanceiro.Domain.Entities
             ValidarUsername(username);
             ValidarEmail(email);
 
-            Username = username;
+            UserName = username;
             Email = email;
-            AtualizarDataModificacao();
+            DataAlteracao = DateTime.Now;
         }
 
         /// <summary>
@@ -62,7 +66,7 @@ namespace ControleFinanceiro.Domain.Entities
 
             ValidarPassword(novaSenha);
             PasswordHash = GerarHash(novaSenha);
-            AtualizarDataModificacao();
+            DataAlteracao = DateTime.Now;
         }
 
         /// <summary>
@@ -81,7 +85,7 @@ namespace ControleFinanceiro.Domain.Entities
         {
             ResetPasswordToken = Guid.NewGuid().ToString("N");
             ResetPasswordTokenExpiration = DateTime.Now.AddHours(2);
-            AtualizarDataModificacao();
+            DataAlteracao = DateTime.Now;
             return ResetPasswordToken;
         }
 
@@ -102,7 +106,7 @@ namespace ControleFinanceiro.Domain.Entities
             PasswordHash = GerarHash(novaSenha);
             ResetPasswordToken = null;
             ResetPasswordTokenExpiration = null;
-            AtualizarDataModificacao();
+            DataAlteracao = DateTime.Now;
             return true;
         }
 
@@ -115,7 +119,7 @@ namespace ControleFinanceiro.Domain.Entities
                 throw new ArgumentException("Role não pode ser vazia");
 
             Role = novaRole;
-            AtualizarDataModificacao();
+            DataAlteracao = DateTime.Now;
         }
 
         #region Validações
@@ -154,6 +158,15 @@ namespace ControleFinanceiro.Domain.Entities
         #endregion
 
         #region Helpers
+
+        /// <summary>
+        /// Marca o usuário como excluído (soft delete)
+        /// </summary>
+        public void MarcarComoExcluido()
+        {
+            Excluido = true;
+            DataAlteracao = DateTime.Now;
+        }
 
         private string GerarHash(string password)
         {

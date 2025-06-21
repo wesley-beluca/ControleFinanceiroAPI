@@ -30,26 +30,46 @@ namespace ControleFinanceiro.Application.Services
             _updateTransacaoValidator = updateTransacaoValidator;
         }
 
-        public async Task<Result<TransacaoDTO>> GetByIdAsync(Guid id)
+        public async Task<Result<TransacaoDTO>> GetByIdAsync(Guid id, Guid? usuarioId = null)
         {
-            Transacao transacao = await _transacaoRepository.GetByIdAsync(id);
-            if (transacao == null)
-                return Result<TransacaoDTO>.Fail("Transação não encontrada");
+            Transacao transacao;
+            
+            if (usuarioId.HasValue)
+            {
+                transacao = await _transacaoRepository.GetByIdAndUsuarioAsync(id, usuarioId.Value);
+                if (transacao == null)
+                    return Result<TransacaoDTO>.Fail("Transação não encontrada ou não pertence ao usuário");
+            }
+            else
+            {
+                transacao = await _transacaoRepository.GetByIdAsync(id);
+                if (transacao == null)
+                    return Result<TransacaoDTO>.Fail("Transação não encontrada");
+            }
 
             TransacaoDTO transacaoDto = MapToDto(transacao);
             return Result<TransacaoDTO>.Ok(transacaoDto);
         }
 
-        public async Task<Result<IEnumerable<TransacaoDTO>>> GetAllAsync()
+        public async Task<Result<IEnumerable<TransacaoDTO>>> GetAllAsync(Guid? usuarioId = null)
         {
-            IEnumerable<Transacao> transacoes = await _transacaoRepository.GetAllAsync();
+            IEnumerable<Transacao> transacoes;
+            
+            if (usuarioId.HasValue)
+            {
+                transacoes = await _transacaoRepository.GetAllByUsuarioAsync(usuarioId.Value);
+            }
+            else
+            {
+                transacoes = await _transacaoRepository.GetAllAsync();
+            }
             
             IEnumerable<TransacaoDTO> transacoesDto = transacoes.Select(t => MapToDto(t));
 
             return Result<IEnumerable<TransacaoDTO>>.Ok(transacoesDto);
         }
 
-        public async Task<Result<IEnumerable<TransacaoDTO>>> GetByPeriodoAsync(DateTime dataInicio, DateTime dataFim)
+        public async Task<Result<IEnumerable<TransacaoDTO>>> GetByPeriodoAsync(DateTime dataInicio, DateTime dataFim, Guid? usuarioId = null)
         {
             // Validação das datas
             if (dataInicio > dataFim)
@@ -59,19 +79,19 @@ namespace ControleFinanceiro.Application.Services
             if ((dataFim - dataInicio).TotalDays > 366)
                 return Result<IEnumerable<TransacaoDTO>>.Fail("O período de consulta não pode ser maior que 1 ano");
 
-            IEnumerable<Transacao> transacoes = await _transacaoRepository.GetByPeriodoAsync(dataInicio, dataFim);
+            IEnumerable<Transacao> transacoes = await _transacaoRepository.GetByPeriodoAsync(dataInicio, dataFim, usuarioId);
             
             IEnumerable<TransacaoDTO> transacoesDto = transacoes.Select(t => MapToDto(t));
 
             return Result<IEnumerable<TransacaoDTO>>.Ok(transacoesDto);
         }
 
-        public async Task<Result<IEnumerable<TransacaoDTO>>> GetByTipoAsync(int tipo)
+        public async Task<Result<IEnumerable<TransacaoDTO>>> GetByTipoAsync(int tipo, Guid? usuarioId = null)
         {
             if (!Enum.IsDefined(typeof(TipoTransacao), tipo))
                 return Result<IEnumerable<TransacaoDTO>>.Fail("Tipo de transação inválido. Use 0 para Despesa ou 1 para Receita");
 
-            IEnumerable<Transacao> transacoes = await _transacaoRepository.GetByTipoAsync((TipoTransacao)tipo);
+            IEnumerable<Transacao> transacoes = await _transacaoRepository.GetByTipoAsync((TipoTransacao)tipo, usuarioId);
             
             IEnumerable<TransacaoDTO> transacoesDto = transacoes.Select(t => MapToDto(t));
 

@@ -18,7 +18,7 @@ namespace ControleFinanceiro.Application.Services
             _transacaoRepository = transacaoRepository;
         }
 
-        public async Task<Result<ResumoFinanceiroDTO>> GerarResumoFinanceiroAsync(DateTime dataInicio, DateTime dataFim)
+        public async Task<Result<ResumoFinanceiroDTO>> GerarResumoFinanceiroAsync(DateTime dataInicio, DateTime dataFim, Guid? usuarioId = null)
         {
             try
             {
@@ -30,8 +30,8 @@ namespace ControleFinanceiro.Application.Services
                 if ((dataFim - dataInicio).TotalDays > 366)
                     return Result<ResumoFinanceiroDTO>.Fail("O período de consulta não pode ser maior que 1 ano");
 
-                // Buscar todas as transações no período
-                var transacoesPeriodo = await _transacaoRepository.GetByPeriodoAsync(dataInicio, dataFim);
+                // Buscar todas as transações no período (filtradas por usuário se especificado)
+                var transacoesPeriodo = await _transacaoRepository.GetByPeriodoAsync(dataInicio, dataFim, usuarioId);
                 
                 // Filtrar transações excluídas (garantia extra, já que o repositório deve aplicar o filtro)
                 transacoesPeriodo = transacoesPeriodo.Where(t => !t.Excluido).ToList();
@@ -39,7 +39,8 @@ namespace ControleFinanceiro.Application.Services
                 // Calcular saldo anterior (todas as transações antes da data de início)
                 var transacoesAnteriores = await _transacaoRepository.GetByPeriodoAsync(
                     DateTime.MinValue, 
-                    dataInicio.AddDays(-1));
+                    dataInicio.AddDays(-1),
+                    usuarioId);
                 
                 // Filtrar transações excluídas do período anterior também
                 transacoesAnteriores = transacoesAnteriores.Where(t => !t.Excluido).ToList();

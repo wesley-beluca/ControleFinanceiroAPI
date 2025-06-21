@@ -2,6 +2,7 @@ using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Application.Services;
 using ControleFinanceiro.Application.Validations;
+using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
 using ControleFinanceiro.Domain.Interfaces.Repositories;
 using ControleFinanceiro.Infrastructure.Data;
@@ -9,6 +10,7 @@ using ControleFinanceiro.Infrastructure.Extensions;
 using ControleFinanceiro.Infrastructure.Repositories;
 using ControleFinanceiro.Infrastructure.Services;
 using FluentValidation;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +26,21 @@ namespace ControleFinanceiro.Infrastructure.IoC
                 options.UseSqlServer(
                     configuration.GetConnectionString("DefaultConnection"),
                     b => b.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
+                    
+            // Configuração do Identity para suporte ao UserManager
+            services.AddIdentityCore<Usuario>(options =>
+            {
+                // Configuração mínima para senhas
+                options.Password.RequireDigit = true;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireUppercase = false;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequiredLength = 6;
+            })
+            .AddEntityFrameworkStores<AppDbContext>();
+            
+            // Registrar o UserManager como serviço
+            services.AddScoped<UserManager<Usuario>>();
 
             // Repositórios
             services.AddScoped<ITransacaoRepository, TransacaoRepository>();

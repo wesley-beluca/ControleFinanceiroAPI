@@ -1,4 +1,6 @@
 using ControleFinanceiro.Domain.Entities;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System;
@@ -8,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace ControleFinanceiro.Infrastructure.Data
 {
-    public class AppDbContext : DbContext
+    public class AppDbContext : IdentityDbContext<Usuario, IdentityRole<Guid>, Guid>
     {
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
         {
@@ -20,6 +22,15 @@ namespace ControleFinanceiro.Infrastructure.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            
+            // Configurar o nome das tabelas do Identity para evitar conflitos
+            modelBuilder.Entity<Usuario>().ToTable("Usuarios");
+            modelBuilder.Entity<IdentityRole<Guid>>().ToTable("Roles");
+            modelBuilder.Entity<IdentityUserClaim<Guid>>().ToTable("UserClaims");
+            modelBuilder.Entity<IdentityUserRole<Guid>>().ToTable("UserRoles");
+            modelBuilder.Entity<IdentityUserLogin<Guid>>().ToTable("UserLogins");
+            modelBuilder.Entity<IdentityRoleClaim<Guid>>().ToTable("RoleClaims");
+            modelBuilder.Entity<IdentityUserToken<Guid>>().ToTable("UserTokens");
 
             // Aplicando configurações comuns a todas as entidades derivadas de Entity
             var entityTypes = modelBuilder.Model.GetEntityTypes()
@@ -58,7 +69,7 @@ namespace ControleFinanceiro.Infrastructure.Data
             modelBuilder.Entity<Usuario>(entity =>
             {
                 entity.HasKey(e => e.Id);
-                entity.Property(e => e.Username).IsRequired().HasMaxLength(Usuario.USERNAME_MAX_LENGTH);
+                entity.Property(e => e.UserName).IsRequired().HasMaxLength(Usuario.USERNAME_MAX_LENGTH);
                 entity.Property(e => e.Email).IsRequired().HasMaxLength(Usuario.EMAIL_MAX_LENGTH);
                 entity.Property(e => e.PasswordHash).IsRequired();
                 entity.Property(e => e.Role).IsRequired();
@@ -66,7 +77,7 @@ namespace ControleFinanceiro.Infrastructure.Data
                 entity.Property(e => e.ResetPasswordTokenExpiration).IsRequired(false);
                 
                 // Índices para busca rápida
-                entity.HasIndex(e => e.Username).IsUnique();
+                entity.HasIndex(e => e.UserName).IsUnique();
                 entity.HasIndex(e => e.Email).IsUnique();
                 entity.HasIndex(e => e.ResetPasswordToken);
                 

@@ -61,19 +61,19 @@ namespace ControleFinanceiro.Infrastructure.Services
                         // Envia o email de notificação
                         bool enviado = await _emailService.EnviarEmailSaldoNegativoAsync(
                             usuario.Email,
-                            usuario.Username,
+                            usuario.UserName,
                             saldo);
                             
                         if (enviado)
                         {
                             _logger.LogInformation("Notificação enviada para o usuário {Username} (ID: {UsuarioId}) com saldo {Saldo}", 
-                                usuario.Username, usuarioId, saldo);
+                                usuario.UserName, usuarioId, saldo);
                             usuariosNotificados++;
                         }
                         else
                         {
                             _logger.LogWarning("Falha ao enviar notificação para o usuário {Username} (ID: {UsuarioId})",
-                                usuario.Username, usuarioId);
+                                usuario.UserName, usuarioId);
                         }
                     }
                     else

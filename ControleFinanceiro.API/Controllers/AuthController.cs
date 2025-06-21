@@ -38,7 +38,7 @@ namespace ControleFinanceiro.API.Controllers
             var userDto = new UserDTO
             {
                 Id = usuario.Id,
-                Username = usuario.Username,
+                Username = usuario.UserName,
                 Email = usuario.Email,
                 Role = usuario.Role,
                 DataInclusao = usuario.DataInclusao,
@@ -68,7 +68,7 @@ namespace ControleFinanceiro.API.Controllers
             var userDto = new UserDTO
             {
                 Id = usuario.Id,
-                Username = usuario.Username,
+                Username = usuario.UserName,
                 Email = usuario.Email,
                 Role = usuario.Role,
                 DataInclusao = usuario.DataInclusao,
@@ -94,7 +94,7 @@ namespace ControleFinanceiro.API.Controllers
 
             if (usuario != null && !string.IsNullOrEmpty(token))
             {
-                var emailEnviado = await _emailService.EnviarEmailResetSenhaAsync(model.Email, token, usuario.Username);
+                var emailEnviado = await _emailService.EnviarEmailResetSenhaAsync(model.Email, token, usuario.UserName);
                 
                 if (!emailEnviado)
                 {

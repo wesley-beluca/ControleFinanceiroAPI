@@ -2,6 +2,7 @@ using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -16,23 +17,31 @@ namespace ControleFinanceiro.API.Controllers
     public class TransacoesController : ControllerBase
     {
         private readonly ITransacaoService _transacaoService;
+        private readonly UserManager<Usuario> _userManager;
 
-        public TransacoesController(ITransacaoService transacaoService)
+        public TransacoesController(ITransacaoService transacaoService, UserManager<Usuario> userManager)
         {
             _transacaoService = transacaoService;
+            _userManager = userManager;
         }
 
         [HttpGet]
         public async Task<ActionResult<Result<IEnumerable<TransacaoDTO>>>> GetAll()
         {
-            var result = await _transacaoService.GetAllAsync();
+            // Obtém o ID do usuário logado
+            Guid? usuarioId = await ObterUsuarioIdLogadoAsync();
+            
+            var result = await _transacaoService.GetAllAsync(usuarioId);
             return Ok(result);
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<Result<TransacaoDTO>>> GetById(Guid id)
         {
-            var result = await _transacaoService.GetByIdAsync(id);
+            // Obtém o ID do usuário logado
+            Guid? usuarioId = await ObterUsuarioIdLogadoAsync();
+            
+            var result = await _transacaoService.GetByIdAsync(id, usuarioId);
             return Ok(result);
         }
 
@@ -41,14 +50,20 @@ namespace ControleFinanceiro.API.Controllers
             [FromQuery] DateTime dataInicio, 
             [FromQuery] DateTime dataFim)
         {
-            var result = await _transacaoService.GetByPeriodoAsync(dataInicio, dataFim);
+            // Obtém o ID do usuário logado
+            Guid? usuarioId = await ObterUsuarioIdLogadoAsync();
+            
+            var result = await _transacaoService.GetByPeriodoAsync(dataInicio, dataFim, usuarioId);
             return Ok(result);
         }
 
         [HttpGet("tipo/{tipo}")]
         public async Task<ActionResult<Result<IEnumerable<TransacaoDTO>>>> GetByTipo(int tipo)
         {
-            var result = await _transacaoService.GetByTipoAsync(tipo);
+            // Obtém o ID do usuário logado
+            Guid? usuarioId = await ObterUsuarioIdLogadoAsync();
+            
+            var result = await _transacaoService.GetByTipoAsync(tipo, usuarioId);
             return Ok(result);
         }
 
@@ -107,6 +122,24 @@ namespace ControleFinanceiro.API.Controllers
                 return userId;
 
             return null;
+        }
+        
+        /// <summary>
+        /// Obtém o ID do usuário logado usando o UserManager
+        /// </summary>
+        /// <returns>ID do usuário ou null se não estiver autenticado</returns>
+        private async Task<Guid?> ObterUsuarioIdLogadoAsync()
+        {
+            // Verifica se o usuário está autenticado
+            if (!User.Identity.IsAuthenticated)
+                return null;
+                
+            // Obtém o usuário atual usando o UserManager
+            var usuario = await _userManager.GetUserAsync(User);
+            if (usuario == null)
+                return null;
+                
+            return usuario.Id;
         }
     }
 }

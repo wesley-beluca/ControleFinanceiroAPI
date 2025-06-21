@@ -24,7 +24,7 @@ namespace ControleFinanceiro.Infrastructure.Repositories
 
         public async Task<Usuario> ObterPorUsernameAsync(string username)
         {
-            return await _context.Set<Usuario>().FirstOrDefaultAsync(u => u.Username == username);
+            return await _context.Set<Usuario>().FirstOrDefaultAsync(u => u.UserName == username);
         }
 
         public async Task<Usuario> ObterPorEmailAsync(string email)
@@ -69,7 +69,7 @@ namespace ControleFinanceiro.Infrastructure.Repositories
 
         public async Task<bool> ExisteUsernameAsync(string username)
         {
-            return await _context.Set<Usuario>().AnyAsync(u => u.Username == username);
+            return await _context.Set<Usuario>().AnyAsync(u => u.UserName == username);
         }
 
         public async Task<bool> ExisteEmailAsync(string email)
