@@ -87,13 +87,11 @@ namespace ControleFinanceiro.API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            // Solicitar token de reset de senha
             var (sucesso, mensagem, usuario, token) = await _authService.SolicitarResetSenhaAsync(model.Email);
 
             if (!sucesso)
                 return BadRequest(new { message = mensagem });
 
-            // Enviar email com o token
             if (usuario != null && !string.IsNullOrEmpty(token))
             {
                 var emailEnviado = await _emailService.EnviarEmailResetSenhaAsync(model.Email, token, usuario.Username);

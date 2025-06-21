@@ -22,5 +22,14 @@ namespace ControleFinanceiro.Domain.Interfaces
         /// <param name="username">Nome de usuário</param>
         /// <returns>True se o email foi enviado com sucesso, False caso contrário</returns>
         Task<bool> EnviarEmailResetSenhaAsync(string destinatario, string token, string username);
+        
+        /// <summary>
+        /// Envia um email de notificação de saldo negativo
+        /// </summary>
+        /// <param name="destinatario">Email do destinatário</param>
+        /// <param name="username">Nome de usuário</param>
+        /// <param name="saldo">Saldo atual do usuário</param>
+        /// <returns>True se o email foi enviado com sucesso, False caso contrário</returns>
+        Task<bool> EnviarEmailSaldoNegativoAsync(string destinatario, string username, decimal saldo);
     }
 }

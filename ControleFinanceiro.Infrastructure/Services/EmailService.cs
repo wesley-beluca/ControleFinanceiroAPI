@@ -1,6 +1,7 @@
 using ControleFinanceiro.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
 using System;
+using System.Globalization;
 using System.Net;
 using System.Net.Mail;
 using System.Threading.Tasks;
@@ -106,6 +107,51 @@ namespace ControleFinanceiro.Infrastructure.Services
                             <a href='{resetUrl}' class='button'>Redefinir Senha</a>
                         </p>
                         <p>Este link expirará em 24 horas.</p>
+                        <p>Atenciosamente,<br>Equipe de Controle Financeiro</p>
+                    </div>
+                    <div class='footer'>
+                        <p>Este é um email automático. Por favor, não responda.</p>
+                    </div>
+                </div>
+            </body>
+            </html>";
+
+            return await EnviarEmailAsync(destinatario, assunto, corpo);
+        }
+        
+        public virtual async Task<bool> EnviarEmailSaldoNegativoAsync(string destinatario, string username, decimal saldo)
+        {
+            var assunto = "Alerta de Saldo Negativo - Controle Financeiro";
+            
+            // Formata o saldo negativo para exibição em reais
+            var saldoFormatado = Math.Abs(saldo).ToString("C", new CultureInfo("pt-BR"));
+            
+            var corpo = $@"
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .header {{ background-color: #ef4444; color: white; padding: 10px; text-align: center; }}
+                    .content {{ padding: 20px; background-color: #f9f9f9; }}
+                    .alert {{ color: #ef4444; font-weight: bold; }}
+                    .button {{ background-color: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; }}
+                    .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #777; }}
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='header'>
+                        <h2>Alerta de Saldo Negativo</h2>
+                    </div>
+                    <div class='content'>
+                        <p>Olá <strong>{username}</strong>,</p>
+                        <p>Gostaríamos de informar que seu saldo atual no sistema de Controle Financeiro está <span class='alert'>negativo</span>.</p>
+                        <p>Saldo atual: <span class='alert'>-{saldoFormatado}</span></p>
+                        <p>Recomendamos que você verifique suas transações recentes e tome as medidas necessárias para regularizar sua situação financeira.</p>
+                        <p style='text-align: center; margin-top: 20px;'>
+                            <a href='{_baseUrl}/dashboard' class='button'>Acessar o Sistema</a>
+                        </p>
                         <p>Atenciosamente,<br>Equipe de Controle Financeiro</p>
                     </div>
                     <div class='footer'>

@@ -15,7 +15,6 @@ namespace ControleFinanceiro.Domain.Entities
         public Guid? UsuarioId { get; private set; }
         public Usuario Usuario { get; private set; }
 
-        // Construtor para EF Core
         protected Transacao() : base()
         {
         }
@@ -30,10 +29,8 @@ namespace ControleFinanceiro.Domain.Entities
             UsuarioId = usuarioId;
         }
 
-        // Métodos para atualização de propriedades
         public void SetTipo(TipoTransacao tipo)
         {
-            // Validação do tipo de transação
             if (!Enum.IsDefined(typeof(TipoTransacao), tipo))
             {
                 throw new ArgumentException("Tipo de transação inválido");

@@ -5,6 +5,7 @@ using ControleFinanceiro.Application.Validations;
 using ControleFinanceiro.Domain.Interfaces;
 using ControleFinanceiro.Domain.Interfaces.Repositories;
 using ControleFinanceiro.Infrastructure.Data;
+using ControleFinanceiro.Infrastructure.Extensions;
 using ControleFinanceiro.Infrastructure.Repositories;
 using ControleFinanceiro.Infrastructure.Services;
 using FluentValidation;
@@ -31,6 +32,11 @@ namespace ControleFinanceiro.Infrastructure.IoC
             // Serviços de Infraestrutura
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<ISaldoService, SaldoService>();
+            services.AddScoped<INotificacaoSaldoService, NotificacaoSaldoService>();
+            
+            // Configuração do Quartz para jobs agendados
+            services.AddQuartzJobs(configuration);
 
             return services;
         }
