@@ -1,11 +1,14 @@
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Domain.Entities;
+using ControleFinanceiro.Domain.Interfaces;
+using ControleFinanceiro.Domain.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -18,11 +21,13 @@ namespace ControleFinanceiro.API.Controllers
     {
         private readonly ITransacaoService _transacaoService;
         private readonly UserManager<Usuario> _userManager;
+        private readonly INotificationService _notificationService;
 
-        public TransacoesController(ITransacaoService transacaoService, UserManager<Usuario> userManager)
+        public TransacoesController(ITransacaoService transacaoService, UserManager<Usuario> userManager, INotificationService notificationService)
         {
             _transacaoService = transacaoService;
             _userManager = userManager;
+            _notificationService = notificationService;
         }
 
         [HttpGet]
@@ -77,6 +82,15 @@ namespace ControleFinanceiro.API.Controllers
             Guid? usuarioId = ObterUsuarioIdLogado();
 
             var result = await _transacaoService.AddAsync(transacaoDto, usuarioId);
+            
+            if (!result.Success && _notificationService.HasNotifications)
+            {
+                return BadRequest(new { 
+                    message = "Ocorreram erros ao criar a transação", 
+                    errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
+                });
+            }
+            
             return result.Success 
                 ? CreatedAtAction(nameof(GetById), new { id = result.Data }, result)
                 : BadRequest(result);
@@ -92,6 +106,15 @@ namespace ControleFinanceiro.API.Controllers
             Guid? usuarioId = ObterUsuarioIdLogado();
 
             var result = await _transacaoService.UpdateAsync(id, transacaoDto, usuarioId);
+            
+            if (!result.Success && _notificationService.HasNotifications)
+            {
+                return BadRequest(new { 
+                    message = "Ocorreram erros ao atualizar a transação", 
+                    errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
+                });
+            }
+            
             return Ok(result);
         }
 
@@ -99,6 +122,15 @@ namespace ControleFinanceiro.API.Controllers
         public async Task<ActionResult<Result<bool>>> Delete(Guid id)
         {
             var result = await _transacaoService.DeleteAsync(id);
+            
+            if (!result.Success && _notificationService.HasNotifications)
+            {
+                return BadRequest(new { 
+                    message = "Ocorreram erros ao excluir a transação", 
+                    errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
+                });
+            }
+            
             return Ok(result);
         }
 

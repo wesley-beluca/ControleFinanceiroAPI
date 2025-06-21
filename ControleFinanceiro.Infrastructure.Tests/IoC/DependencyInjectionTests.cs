@@ -2,10 +2,13 @@ using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Application.Services;
 using ControleFinanceiro.Application.Validations;
+using ControleFinanceiro.Domain.Interfaces;
 using ControleFinanceiro.Domain.Interfaces.Repositories;
+using ControleFinanceiro.Domain.Notifications;
 using ControleFinanceiro.Infrastructure.Data;
 using ControleFinanceiro.Infrastructure.IoC;
 using ControleFinanceiro.Infrastructure.Repositories;
+using ControleFinanceiro.Infrastructure.Services;
 using FluentAssertions;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -67,6 +70,9 @@ namespace ControleFinanceiro.Infrastructure.Tests.IoC
             services.AddDbContext<AppDbContext>(options => 
                 options.UseInMemoryDatabase("TestDb_Application"));
             services.AddScoped<ITransacaoRepository, TransacaoRepository>();
+            
+            // Registrar o INotificationService que é necessário para o TransacaoService
+            services.AddScoped<INotificationService, NotificationService>();
 
             // Act
             services.AddApplication();

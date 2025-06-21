@@ -6,6 +6,8 @@ using ControleFinanceiro.API.Controllers;
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Domain.Entities;
+using ControleFinanceiro.Domain.Interfaces;
+using ControleFinanceiro.Domain.Notifications;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -21,13 +23,15 @@ namespace ControleFinanceiro.API.Tests.Controllers
     {
         private readonly Mock<ITransacaoService> _transacaoServiceMock;
         private readonly Mock<UserManager<Usuario>> _userManagerMock;
+        private readonly Mock<INotificationService> _notificationServiceMock;
         private readonly TransacoesController _controller;
 
         public TransacoesControllerTests()
         {
             _transacaoServiceMock = new Mock<ITransacaoService>();
             _userManagerMock = MockUserManager<Usuario>();
-            _controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            _notificationServiceMock = new Mock<INotificationService>();
+            _controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
         }
         
         // Helper method to create UserManager mock
@@ -93,7 +97,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _transacaoServiceMock.Setup(s => s.GetAllAsync(It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Ok(transacoes));
 
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
 
             // Act
@@ -114,7 +118,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _transacaoServiceMock.Setup(s => s.GetAllAsync(It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Fail("Erro ao buscar transações"));
 
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
 
             // Act
@@ -143,7 +147,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _transacaoServiceMock.Setup(s => s.GetByIdAsync(id, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<TransacaoDTO>.Ok(transacao));
 
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
 
             // Act
@@ -168,7 +172,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _transacaoServiceMock.Setup(s => s.GetByIdAsync(id, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<TransacaoDTO>.Fail("Transação não encontrada"));
 
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
 
             // Act
@@ -197,7 +201,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _transacaoServiceMock.Setup(s => s.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Ok(transacoes));
 
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
 
             // Act
@@ -221,7 +225,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _transacaoServiceMock.Setup(s => s.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Fail("A data inicial não pode ser maior que a data final"));
 
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
 
             // Act
@@ -249,7 +253,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _transacaoServiceMock.Setup(s => s.GetByTipoAsync(tipo, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Ok(transacoes));
 
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
 
             // Act
@@ -272,7 +276,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _transacaoServiceMock.Setup(s => s.GetByTipoAsync(tipoInvalido, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Fail("Tipo de transação inválido"));
 
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
 
             // Act
@@ -308,7 +312,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _userManagerMock.Setup(um => um.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
                 .ReturnsAsync(user);
                 
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, usuarioId);
 
             // Act
@@ -342,7 +346,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _userManagerMock.Setup(um => um.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
                 .ReturnsAsync(user);
                 
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, usuarioId);
             
             // Simular ModelState inválido
@@ -381,7 +385,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _userManagerMock.Setup(um => um.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
                 .ReturnsAsync(user);
                 
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, usuarioId);
 
             // Act
@@ -419,7 +423,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _userManagerMock.Setup(um => um.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
                 .ReturnsAsync(user);
                 
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, usuarioId);
 
             // Act
@@ -456,7 +460,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             };
             
             // Usar o controller com contexto de autenticação
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object)
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object)
             {
                 ControllerContext = controllerContext
             };
@@ -542,7 +546,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 HttpContext = httpContext
             };
             
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object)
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object)
             {
                 ControllerContext = controllerContext
             };
@@ -568,7 +572,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 HttpContext = httpContext
             };
             
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object)
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object)
             {
                 ControllerContext = controllerContext
             };
@@ -607,7 +611,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 HttpContext = httpContext
             };
             
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object)
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object)
             {
                 ControllerContext = controllerContext
             };
@@ -653,7 +657,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 HttpContext = httpContext
             };
             
-            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object)
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object)
             {
                 ControllerContext = controllerContext
             };

@@ -2,9 +2,11 @@ using ControleFinanceiro.API.Controllers;
 using ControleFinanceiro.Application.DTOs.Auth;
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
+using ControleFinanceiro.Domain.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
@@ -15,13 +17,20 @@ namespace ControleFinanceiro.API.Tests.Controllers
     {
         private readonly Mock<IAuthService> _mockAuthService;
         private readonly Mock<IEmailService> _mockEmailService;
+        private readonly Mock<INotificationService> _mockNotificationService;
         private readonly AuthController _controller;
 
         public AuthControllerTests()
         {
             _mockAuthService = new Mock<IAuthService>();
             _mockEmailService = new Mock<IEmailService>();
-            _controller = new AuthController(_mockAuthService.Object, _mockEmailService.Object);
+            _mockNotificationService = new Mock<INotificationService>();
+            
+            // Configuração padrão para o mock do INotificationService
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(false);
+            _mockNotificationService.Setup(n => n.Notifications).Returns(new List<NotificationItem>().AsReadOnly());
+            
+            _controller = new AuthController(_mockAuthService.Object, _mockEmailService.Object, _mockNotificationService.Object);
         }
 
         [Fact]

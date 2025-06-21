@@ -6,6 +6,8 @@ using ControleFinanceiro.API.Controllers;
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Domain.Entities;
+using ControleFinanceiro.Domain.Interfaces;
+using ControleFinanceiro.Domain.Notifications;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -21,13 +23,20 @@ namespace ControleFinanceiro.API.Tests.Controllers
     {
         private readonly Mock<IResumoFinanceiroService> _resumoFinanceiroServiceMock;
         private readonly Mock<UserManager<Usuario>> _userManagerMock;
+        private readonly Mock<INotificationService> _notificationServiceMock;
         private readonly ResumoFinanceiroController _controller;
 
         public ResumoFinanceiroControllerTests()
         {
             _resumoFinanceiroServiceMock = new Mock<IResumoFinanceiroService>();
             _userManagerMock = MockUserManager<Usuario>();
-            _controller = new ResumoFinanceiroController(_resumoFinanceiroServiceMock.Object, _userManagerMock.Object);
+            _notificationServiceMock = new Mock<INotificationService>();
+            
+            // Configuração padrão para o mock do INotificationService
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(false);
+            _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem>().AsReadOnly());
+            
+            _controller = new ResumoFinanceiroController(_resumoFinanceiroServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             
             // Setup user authentication
             var usuarioId = Guid.NewGuid();

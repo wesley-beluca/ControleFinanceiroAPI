@@ -1,10 +1,13 @@
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
+using ControleFinanceiro.Domain.Notifications;
 using ControleFinanceiro.Infrastructure.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Moq;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 #nullable enable
@@ -16,12 +19,14 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
         private readonly Mock<IUsuarioRepository> _mockUsuarioRepository;
         private readonly Mock<IConfiguration> _mockConfiguration;
         private readonly Mock<UserManager<Usuario>> _mockUserManager;
+        private readonly Mock<INotificationService> _mockNotificationService;
         private readonly AuthService _authService;
 
         public AuthServiceTests()
         {
             _mockUsuarioRepository = new Mock<IUsuarioRepository>();
             _mockConfiguration = new Mock<IConfiguration>();
+            _mockNotificationService = new Mock<INotificationService>();
             
             // Setup for UserManager mock
             var userStoreMock = new Mock<IUserStore<Usuario>>();
@@ -31,7 +36,13 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             _mockConfiguration.Setup(x => x["Jwt:Issuer"]).Returns("teste_issuer");
             _mockConfiguration.Setup(x => x["Jwt:Audience"]).Returns("teste_audience");
             
-            _authService = new AuthService(_mockUsuarioRepository.Object, _mockConfiguration.Object, _mockUserManager.Object);
+            // Configuração padrão para o mock do INotificationService
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(false);
+            _mockNotificationService.Setup(n => n.Notifications).Returns(new List<NotificationItem>().AsReadOnly());
+            _mockNotificationService.Setup(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>())).Verifiable();
+            _mockNotificationService.Setup(n => n.Clear()).Verifiable();
+            
+            _authService = new AuthService(_mockUsuarioRepository.Object, _mockConfiguration.Object, _mockUserManager.Object, _mockNotificationService.Object);
         }
 
         [Fact]
@@ -46,10 +57,6 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             
             _mockUsuarioRepository.Setup(x => x.AtualizarAsync(It.IsAny<Usuario>()))
                 .ReturnsAsync(usuario);
-                
-            // Simular o método GerarTokenResetSenha da entidade Usuario
-            // Como não podemos mockar métodos de instância facilmente, vamos usar uma abordagem diferente
-            // Vamos verificar se o método AtualizarAsync foi chamado, o que indica que o token foi gerado
             
             // Act
             var resultado = await _authService.SolicitarResetSenhaAsync(email);

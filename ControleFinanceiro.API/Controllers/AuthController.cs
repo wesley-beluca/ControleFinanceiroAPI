@@ -1,8 +1,10 @@
 using ControleFinanceiro.Application.DTOs.Auth;
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
+using ControleFinanceiro.Domain.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -14,11 +16,13 @@ namespace ControleFinanceiro.API.Controllers
     {
         private readonly IAuthService _authService;
         private readonly IEmailService _emailService;
+        private readonly INotificationService _notificationService;
 
-        public AuthController(IAuthService authService, IEmailService emailService)
+        public AuthController(IAuthService authService, IEmailService emailService, INotificationService notificationService)
         {
             _authService = authService;
             _emailService = emailService;
+            _notificationService = notificationService;
         }
 
         /// <summary>
@@ -33,7 +37,18 @@ namespace ControleFinanceiro.API.Controllers
             var (token, usuario) = await _authService.AuthenticateAsync(model.Username, model.Password);
 
             if (token == null)
+            {
+                // Verifica se há notificações do serviço
+                if (_notificationService.HasNotifications)
+                {
+                    return Unauthorized(new { 
+                        message = "Falha na autenticação", 
+                        errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
+                    });
+                }
+                
                 return Unauthorized(new { message = "Nome de usuário ou senha inválidos" });
+            }
 
             var userDto = new UserDTO
             {
@@ -63,7 +78,18 @@ namespace ControleFinanceiro.API.Controllers
             var (sucesso, mensagem, usuario) = await _authService.RegisterAsync(model.Username, model.Email, model.Password);
 
             if (!sucesso)
+            {
+                // Verifica se há notificações do serviço
+                if (_notificationService.HasNotifications)
+                {
+                    return BadRequest(new { 
+                        message = "Ocorreram erros durante o registro", 
+                        errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
+                    });
+                }
+                
                 return BadRequest(new { message = mensagem });
+            }
 
             var userDto = new UserDTO
             {
@@ -90,7 +116,18 @@ namespace ControleFinanceiro.API.Controllers
             var (sucesso, mensagem, usuario, token) = await _authService.SolicitarResetSenhaAsync(model.Email);
 
             if (!sucesso)
+            {
+                // Verifica se há notificações do serviço
+                if (_notificationService.HasNotifications)
+                {
+                    return BadRequest(new { 
+                        message = "Ocorreram erros ao processar a solicitação", 
+                        errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
+                    });
+                }
+                
                 return BadRequest(new { message = mensagem });
+            }
 
             if (usuario != null && !string.IsNullOrEmpty(token))
             {
@@ -120,7 +157,18 @@ namespace ControleFinanceiro.API.Controllers
             var (sucesso, mensagem) = await _authService.ResetSenhaAsync(model.Token, model.Password);
 
             if (!sucesso)
+            {
+                // Verifica se há notificações do serviço
+                if (_notificationService.HasNotifications)
+                {
+                    return BadRequest(new { 
+                        message = "Ocorreram erros ao redefinir a senha", 
+                        errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
+                    });
+                }
+                
                 return BadRequest(new { message = mensagem });
+            }
 
             return Ok(new { message = mensagem });
         }

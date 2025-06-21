@@ -1,4 +1,5 @@
 using ControleFinanceiro.Domain.Entities;
+using ControleFinanceiro.Domain.Notifications;
 using System.Threading.Tasks;
 
 namespace ControleFinanceiro.Domain.Interfaces

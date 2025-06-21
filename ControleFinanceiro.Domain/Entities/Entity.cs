@@ -28,7 +28,7 @@ namespace ControleFinanceiro.Domain.Entities
         }
 
         /// <summary>
-        /// Marca a entidade como excluída (soft delete)
+        /// Marca a entidade como excluída
         /// </summary>
         public void MarcarComoExcluido()
         {
@@ -37,7 +37,7 @@ namespace ControleFinanceiro.Domain.Entities
         }
         
         /// <summary>
-        /// Define a data de inclusão (usado pelo EF Core)
+        /// Define a data de inclusão
         /// </summary>
         public void DefinirDataInclusao(DateTime data)
         {
@@ -45,7 +45,7 @@ namespace ControleFinanceiro.Domain.Entities
         }
         
         /// <summary>
-        /// Define a data de alteração (usado pelo EF Core)
+        /// Define a data de alteração
         /// </summary>
         public void DefinirDataAlteracao(DateTime? data)
         {
@@ -53,7 +53,7 @@ namespace ControleFinanceiro.Domain.Entities
         }
         
         /// <summary>
-        /// Define o status de exclusão (usado pelo EF Core)
+        /// Define o status de exclusão
         /// </summary>
         public void DefinirExcluido(bool excluido)
         {

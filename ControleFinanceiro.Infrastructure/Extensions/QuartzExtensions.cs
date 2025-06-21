@@ -29,7 +29,7 @@ namespace ControleFinanceiro.Infrastructure.Extensions
                 var jobKey = new JobKey("NotificacaoSaldoNegativoJob");
                 
                 // Obtém a expressão cron da configuração ou usa um valor padrão
-                string cronExpression = configuration["QuartzJobs:NotificacaoSaldoNegativo:CronExpression"] ?? "0 0 8 * * ?"; // Padrão: todos os dias às 8h
+                string cronExpression = configuration["QuartzJobs:NotificacaoSaldoNegativo:CronExpression"] ?? "0 0 8 * * ?";
                 
                 // Verifica se o job está habilitado
                 bool jobEnabled = true;

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using System;
 using System.Security.Cryptography;
 using System.Text;
+using ControleFinanceiro.Domain.Notifications;
 
 namespace ControleFinanceiro.Domain.Entities
 {
@@ -28,11 +29,22 @@ namespace ControleFinanceiro.Domain.Entities
         /// <summary>
         /// Cria um novo usuário
         /// </summary>
-        public Usuario(string username, string email, string password, string role = "User")
+        /// <param name="notification">Objeto de notificação para validação</param>
+        public Usuario(string username, string email, string password, string role = "User", Notification notification = null)
         {
-            ValidarUsername(username);
-            ValidarEmail(email);
-            ValidarPassword(password);
+            var notificationResult = new Notification();
+            
+            notificationResult.AddNotifications(ValidarUsername(username));
+            notificationResult.AddNotifications(ValidarEmail(email));
+            notificationResult.AddNotifications(ValidarPassword(password));
+            
+            // Se foi passado um objeto de notificação, adiciona as notificações a ele
+            if (notification != null)
+                notification.AddNotifications(notificationResult);
+            
+            // Se houver erros de validação, lança exceção apenas se não foi passado um objeto de notificação
+            if (!notificationResult.IsValid && notification == null)
+                throw new ArgumentException(notificationResult.GetErrorMessages());
 
             UserName = username;
             Email = email;
@@ -46,27 +58,66 @@ namespace ControleFinanceiro.Domain.Entities
         /// <summary>
         /// Atualiza os dados do usuário
         /// </summary>
-        public void AtualizarDados(string username, string email)
+        /// <param name="notification">Objeto de notificação para validação</param>
+        /// <returns>True se a atualização foi bem-sucedida, False caso contrário</returns>
+        public bool AtualizarDados(string username, string email, Notification notification = null)
         {
-            ValidarUsername(username);
-            ValidarEmail(email);
+            var notificationResult = new Notification();
+            
+            notificationResult.AddNotifications(ValidarUsername(username));
+            notificationResult.AddNotifications(ValidarEmail(email));
+            
+            // Se foi passado um objeto de notificação, adiciona as notificações a ele
+            if (notification != null)
+                notification.AddNotifications(notificationResult);
+            
+            // Se houver erros de validação
+            if (!notificationResult.IsValid)
+            {
+                // Se não foi passado um objeto de notificação, lança exceção
+                if (notification == null)
+                    throw new ArgumentException(notificationResult.GetErrorMessages());
+                    
+                return false;
+            }
 
             UserName = username;
             Email = email;
             DataAlteracao = DateTime.Now;
+            return true;
         }
 
         /// <summary>
         /// Altera a senha do usuário
         /// </summary>
-        public void AlterarSenha(string senhaAtual, string novaSenha)
+        /// <param name="notification">Objeto de notificação para validação</param>
+        /// <returns>True se a alteração foi bem-sucedida, False caso contrário</returns>
+        public bool AlterarSenha(string senhaAtual, string novaSenha, Notification notification = null)
         {
+            var notificationResult = new Notification();
+            
             if (!VerificarSenha(senhaAtual))
-                throw new ArgumentException("Senha atual incorreta");
+                notificationResult.AddNotification("SenhaAtual", "Senha atual incorreta");
+            
+            notificationResult.AddNotifications(ValidarPassword(novaSenha));
+            
+            // Se foi passado um objeto de notificação, adiciona as notificações a ele
+            if (notification != null)
+                notification.AddNotifications(notificationResult);
+            
+            // Se houver erros de validação
+            if (!notificationResult.IsValid)
+            {
+                // Se não foi passado um objeto de notificação, lança exceção
+                if (notification == null)
+                    throw new ArgumentException(notificationResult.GetErrorMessages());
+                    
+                return false;
+            }
 
-            ValidarPassword(novaSenha);
             PasswordHash = GerarHash(novaSenha);
             DataAlteracao = DateTime.Now;
+            return true;
         }
 
         /// <summary>
@@ -113,46 +164,77 @@ namespace ControleFinanceiro.Domain.Entities
         /// <summary>
         /// Altera o perfil/role do usuário
         /// </summary>
-        public void AlterarRole(string novaRole)
+        /// <param name="notification">Objeto de notificação para validação</param>
+        /// <returns>True se a alteração foi bem-sucedida, False caso contrário</returns>
+        public bool AlterarRole(string novaRole, Notification notification = null)
         {
+            var notificationResult = new Notification();
+            
             if (string.IsNullOrWhiteSpace(novaRole))
-                throw new ArgumentException("Role não pode ser vazia");
+                notificationResult.AddNotification("Role", "Role não pode ser vazia");
+            
+            // Se foi passado um objeto de notificação, adiciona as notificações a ele
+            if (notification != null)
+                notification.AddNotifications(notificationResult);
+            
+            // Se houver erros de validação
+            if (!notificationResult.IsValid)
+            {
+                // Se não foi passado um objeto de notificação, lança exceção
+                if (notification == null)
+                    throw new ArgumentException(notificationResult.GetErrorMessages());
+                    
+                return false;
+            }
 
             Role = novaRole;
             DataAlteracao = DateTime.Now;
+            return true;
         }
 
         #region Validações
 
-        private void ValidarUsername(string username)
+        private Notification ValidarUsername(string username)
         {
+            var notification = new Notification();
+            
             if (string.IsNullOrWhiteSpace(username))
-                throw new ArgumentException("Nome de usuário não pode ser vazio");
+                notification.AddNotification("Username", "Nome de usuário não pode ser vazio");
 
-            if (username.Length < USERNAME_MIN_LENGTH || username.Length > USERNAME_MAX_LENGTH)
-                throw new ArgumentException($"Nome de usuário deve ter entre {USERNAME_MIN_LENGTH} e {USERNAME_MAX_LENGTH} caracteres");
+            if (!string.IsNullOrWhiteSpace(username) && (username.Length < USERNAME_MIN_LENGTH || username.Length > USERNAME_MAX_LENGTH))
+                notification.AddNotification("Username", $"Nome de usuário deve ter entre {USERNAME_MIN_LENGTH} e {USERNAME_MAX_LENGTH} caracteres");
+                
+            return notification;
         }
 
-        private void ValidarEmail(string email)
+        private Notification ValidarEmail(string email)
         {
+            var notification = new Notification();
+            
             if (string.IsNullOrWhiteSpace(email))
-                throw new ArgumentException("Email não pode ser vazio");
+                notification.AddNotification("Email", "Email não pode ser vazio");
 
-            if (email.Length > EMAIL_MAX_LENGTH)
-                throw new ArgumentException($"Email não pode ter mais de {EMAIL_MAX_LENGTH} caracteres");
+            if (!string.IsNullOrWhiteSpace(email) && email.Length > EMAIL_MAX_LENGTH)
+                notification.AddNotification("Email", $"Email não pode ter mais de {EMAIL_MAX_LENGTH} caracteres");
 
             // Validação básica de formato de email
-            if (!email.Contains("@") || !email.Contains("."))
-                throw new ArgumentException("Email inválido");
+            if (!string.IsNullOrWhiteSpace(email) && (!email.Contains("@") || !email.Contains(".")))
+                notification.AddNotification("Email", "Email inválido");
+                
+            return notification;
         }
 
-        private void ValidarPassword(string password)
+        private Notification ValidarPassword(string password)
         {
+            var notification = new Notification();
+            
             if (string.IsNullOrWhiteSpace(password))
-                throw new ArgumentException("Senha não pode ser vazia");
+                notification.AddNotification("Password", "Senha não pode ser vazia");
 
-            if (password.Length < PASSWORD_MIN_LENGTH)
-                throw new ArgumentException($"Senha deve ter pelo menos {PASSWORD_MIN_LENGTH} caracteres");
+            if (!string.IsNullOrWhiteSpace(password) && password.Length < PASSWORD_MIN_LENGTH)
+                notification.AddNotification("Password", $"Senha deve ter pelo menos {PASSWORD_MIN_LENGTH} caracteres");
+                
+            return notification;
         }
 
         #endregion

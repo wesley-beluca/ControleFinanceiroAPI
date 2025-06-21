@@ -77,10 +77,7 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
 
         [Fact]
         public async Task EnviarEmailAsync_WhenSuccessful_ReturnsTrue()
-        {
-            // Este teste requer uma abordagem diferente, pois o método usa SmtpClient que não é facilmente mockável
-            // Vamos criar uma classe derivada para testes que sobrescreve o método de envio
-            
+        {            
             // Arrange
             var testEmailService = new TestableEmailService(_mockConfiguration.Object);
             testEmailService.SetupSendMailResult(true);
@@ -154,7 +151,6 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
         }
     }
 
-    // Classe auxiliar para testar o EmailService sem enviar emails reais
     public class TestableEmailService : EmailService
     {
         public bool SendMailCalled { get; private set; }
@@ -170,7 +166,6 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             _sendMailResult = result;
         }
 
-        // Sobrescreve o método EnviarEmailAsync para não enviar emails reais
         public override async Task<bool> EnviarEmailAsync(string destinatario, string assunto, string corpo)
         {
             try
@@ -201,7 +196,6 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             }
         }
         
-        // Sobrescreve o método EnviarEmailResetSenhaAsync para usar o método EnviarEmailAsync sobrescrito
         public override async Task<bool> EnviarEmailResetSenhaAsync(string destinatario, string token, string username)
         {
             string assunto = "Redefinição de Senha";

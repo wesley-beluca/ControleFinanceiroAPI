@@ -47,6 +47,7 @@ namespace ControleFinanceiro.Infrastructure.IoC
             services.AddScoped<IUsuarioRepository, UsuarioRepository>();
             
             // Serviços de Infraestrutura
+            services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<ISaldoService, SaldoService>();
