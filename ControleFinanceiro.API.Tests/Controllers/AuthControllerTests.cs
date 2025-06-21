@@ -35,7 +35,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _mockAuthService.Setup(x => x.SolicitarResetSenhaAsync(model.Email))
                 .ReturnsAsync((true, "Token de redefinição de senha gerado com sucesso", usuario, token));
 
-            _mockEmailService.Setup(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.Username))
+            _mockEmailService.Setup(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.UserName))
                 .ReturnsAsync(true);
 
             // Act
@@ -51,7 +51,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             Assert.Equal("Instruções para redefinição de senha foram enviadas para seu email", message);
             
             _mockAuthService.Verify(x => x.SolicitarResetSenhaAsync(model.Email), Times.Once);
-            _mockEmailService.Verify(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.Username), Times.Once);
+            _mockEmailService.Verify(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.UserName), Times.Once);
         }
 
         [Fact]
@@ -90,7 +90,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _mockAuthService.Setup(x => x.SolicitarResetSenhaAsync(model.Email))
                 .ReturnsAsync((true, "Token de redefinição de senha gerado com sucesso", usuario, token));
 
-            _mockEmailService.Setup(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.Username))
+            _mockEmailService.Setup(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.UserName))
                 .ReturnsAsync(false);
 
             // Act
@@ -106,7 +106,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             Assert.Equal("Se o email existir em nossa base de dados, você receberá instruções para redefinição de senha.", message);
             
             _mockAuthService.Verify(x => x.SolicitarResetSenhaAsync(model.Email), Times.Once);
-            _mockEmailService.Verify(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.Username), Times.Once);
+            _mockEmailService.Verify(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.UserName), Times.Once);
         }
 
         [Fact]

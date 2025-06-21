@@ -1,11 +1,17 @@
 using System;
+using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using ControleFinanceiro.API.Controllers;
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Domain.Entities;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -14,12 +20,59 @@ namespace ControleFinanceiro.API.Tests.Controllers
     public class ResumoFinanceiroControllerTests
     {
         private readonly Mock<IResumoFinanceiroService> _resumoFinanceiroServiceMock;
+        private readonly Mock<UserManager<Usuario>> _userManagerMock;
         private readonly ResumoFinanceiroController _controller;
 
         public ResumoFinanceiroControllerTests()
         {
             _resumoFinanceiroServiceMock = new Mock<IResumoFinanceiroService>();
-            _controller = new ResumoFinanceiroController(_resumoFinanceiroServiceMock.Object);
+            _userManagerMock = MockUserManager<Usuario>();
+            _controller = new ResumoFinanceiroController(_resumoFinanceiroServiceMock.Object, _userManagerMock.Object);
+            
+            // Setup user authentication
+            var usuarioId = Guid.NewGuid();
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
+            };
+            var identity = new ClaimsIdentity(claims, "TestAuth");
+            var principal = new ClaimsPrincipal(identity);
+            
+            var httpContext = new DefaultHttpContext()
+            {
+                User = principal
+            };
+            
+            _controller.ControllerContext = new ControllerContext()
+            {
+                HttpContext = httpContext
+            };
+            
+            var usuario = new Usuario { Id = usuarioId };
+            _userManagerMock.Setup(x => x.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
+                .ReturnsAsync(usuario);
+        }
+        
+
+        private Mock<UserManager<TUser>> MockUserManager<TUser>() where TUser : class
+        {
+            var store = new Mock<IUserStore<TUser>>();
+            var options = new Mock<IOptions<IdentityOptions>>();
+            var idOptions = new IdentityOptions();
+            options.Setup(o => o.Value).Returns(idOptions);
+
+            var userValidators = new List<IUserValidator<TUser>>();
+            var validator = new Mock<IUserValidator<TUser>>();
+            userValidators.Add(validator.Object);
+
+            var pwdValidators = new List<PasswordValidator<TUser>>();
+            pwdValidators.Add(new PasswordValidator<TUser>());
+            
+            var userManager = new Mock<UserManager<TUser>>(store.Object, options.Object, new PasswordHasher<TUser>(),
+                userValidators, pwdValidators, new UpperInvariantLookupNormalizer(),
+                new IdentityErrorDescriber(), null,
+                new Mock<ILogger<UserManager<TUser>>>().Object);
+            return userManager;
         }
 
         [Fact]
@@ -37,7 +90,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 SaldoFinal = 2000m
             };
 
-            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim))
+            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                        .ReturnsAsync(Result<ResumoFinanceiroDTO>.Ok(resumo));
 
             // Act
@@ -60,7 +113,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var dataInicio = DateTime.Now;
             var dataFim = DateTime.Now.AddDays(-1); // Data inválida (fim antes do início)
 
-            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim))
+            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                        .ReturnsAsync(Result<ResumoFinanceiroDTO>.Fail("A data inicial não pode ser maior que a data final"));
 
             // Act
@@ -80,7 +133,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var dataInicio = DateTime.Now.AddDays(-400); // Mais de 1 ano
             var dataFim = DateTime.Now;
 
-            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim))
+            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                        .ReturnsAsync(Result<ResumoFinanceiroDTO>.Fail("O período não pode ser maior que 1 ano"));
 
             // Act
@@ -108,7 +161,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 SaldoFinal = 0m
             };
 
-            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim))
+            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                        .ReturnsAsync(Result<ResumoFinanceiroDTO>.Ok(resumo));
 
             // Act
@@ -138,7 +191,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 SaldoFinal = -2000m // Saldo negativo
             };
 
-            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim))
+            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                        .ReturnsAsync(Result<ResumoFinanceiroDTO>.Ok(resumo));
 
             // Act
@@ -160,7 +213,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var dataInicio = DateTime.Now.AddDays(-30);
             var dataFim = DateTime.Now;
 
-            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim))
+            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                        .ReturnsAsync(Result<ResumoFinanceiroDTO>.Fail("Erro ao processar o resumo financeiro"));
 
             // Act

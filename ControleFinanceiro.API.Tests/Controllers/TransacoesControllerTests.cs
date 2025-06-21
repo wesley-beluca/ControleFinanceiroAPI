@@ -8,7 +8,10 @@ using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Domain.Entities;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -17,29 +20,84 @@ namespace ControleFinanceiro.API.Tests.Controllers
     public class TransacoesControllerTests
     {
         private readonly Mock<ITransacaoService> _transacaoServiceMock;
+        private readonly Mock<UserManager<Usuario>> _userManagerMock;
         private readonly TransacoesController _controller;
 
         public TransacoesControllerTests()
         {
             _transacaoServiceMock = new Mock<ITransacaoService>();
-            _controller = new TransacoesController(_transacaoServiceMock.Object);
+            _userManagerMock = MockUserManager<Usuario>();
+            _controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+        }
+        
+        // Helper method to create UserManager mock
+        private Mock<UserManager<TUser>> MockUserManager<TUser>() where TUser : class
+        {
+            var store = new Mock<IUserStore<TUser>>();
+            var options = new Mock<IOptions<IdentityOptions>>();
+            var idOptions = new IdentityOptions();
+            options.Setup(o => o.Value).Returns(idOptions);
+            var userValidators = new List<IUserValidator<TUser>>();
+            var validator = new Mock<IUserValidator<TUser>>();
+            userValidators.Add(validator.Object);
+            var pwdValidators = new List<PasswordValidator<TUser>>();
+            pwdValidators.Add(new PasswordValidator<TUser>());
+            var userManager = new Mock<UserManager<TUser>>(store.Object, options.Object, new PasswordHasher<TUser>(),
+                userValidators, pwdValidators, new UpperInvariantLookupNormalizer(),
+                new IdentityErrorDescriber(), null,
+                new Mock<ILogger<UserManager<TUser>>>().Object);
+            return userManager;
+        }
+
+        private void ConfigureControllerContext(TransacoesController controller, Guid userId)
+        {
+            // Create claims for the user
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                new Claim(ClaimTypes.Name, "testuser@example.com")
+            };
+            
+            var identity = new ClaimsIdentity(claims, "TestAuthentication");
+            var claimsPrincipal = new ClaimsPrincipal(identity);
+            
+            // Create and configure HttpContext
+            var httpContext = new DefaultHttpContext
+            {
+                User = claimsPrincipal
+            };
+            
+            // Set up controller context
+            controller.ControllerContext = new ControllerContext
+            {
+                HttpContext = httpContext
+            };
+            
+            // Configure UserManager to return a user when GetUserAsync is called
+            var user = new Usuario { Id = userId, UserName = "testuser@example.com" };
+            _userManagerMock.Setup(um => um.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
+                .ReturnsAsync(user);
         }
 
         [Fact]
         public async Task GetAll_QuandoHaTransacoes_DeveRetornarOkComLista()
         {
             // Arrange
+            var userId = Guid.NewGuid();
             var transacoes = new List<TransacaoDTO>
             {
                 new TransacaoDTO { Id = Guid.NewGuid(), Descricao = "Transacao 1", Valor = 100m },
                 new TransacaoDTO { Id = Guid.NewGuid(), Descricao = "Transacao 2", Valor = 200m }
             };
 
-            _transacaoServiceMock.Setup(s => s.GetAllAsync())
+            _transacaoServiceMock.Setup(s => s.GetAllAsync(It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Ok(transacoes));
 
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            ConfigureControllerContext(controller, userId);
+
             // Act
-            var result = await _controller.GetAll();
+            var result = await controller.GetAll();
 
             // Assert
             var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
@@ -52,11 +110,15 @@ namespace ControleFinanceiro.API.Tests.Controllers
         public async Task GetAll_QuandoOcorreErro_DeveRetornarBadRequest()
         {
             // Arrange
-            _transacaoServiceMock.Setup(s => s.GetAllAsync())
+            var userId = Guid.NewGuid();
+            _transacaoServiceMock.Setup(s => s.GetAllAsync(It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Fail("Erro ao buscar transações"));
 
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            ConfigureControllerContext(controller, userId);
+
             // Act
-            var result = await _controller.GetAll();
+            var result = await controller.GetAll();
 
             // Assert
             var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
@@ -69,6 +131,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
         public async Task GetById_QuandoTransacaoExiste_DeveRetornarOkComTransacao()
         {
             // Arrange
+            var userId = Guid.NewGuid();
             var id = Guid.NewGuid();
             var transacao = new TransacaoDTO
             {
@@ -77,11 +140,14 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 Valor = 150m
             };
 
-            _transacaoServiceMock.Setup(s => s.GetByIdAsync(id))
+            _transacaoServiceMock.Setup(s => s.GetByIdAsync(id, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<TransacaoDTO>.Ok(transacao));
 
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            ConfigureControllerContext(controller, userId);
+
             // Act
-            var result = await _controller.GetById(id);
+            var result = await controller.GetById(id);
 
             // Assert
             var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
@@ -96,13 +162,17 @@ namespace ControleFinanceiro.API.Tests.Controllers
         public async Task GetById_QuandoTransacaoNaoExiste_DeveRetornarNotFound()
         {
             // Arrange
+            var userId = Guid.NewGuid();
             var id = Guid.NewGuid();
 
-            _transacaoServiceMock.Setup(s => s.GetByIdAsync(id))
+            _transacaoServiceMock.Setup(s => s.GetByIdAsync(id, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<TransacaoDTO>.Fail("Transação não encontrada"));
 
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            ConfigureControllerContext(controller, userId);
+
             // Act
-            var result = await _controller.GetById(id);
+            var result = await controller.GetById(id);
 
             // Assert
             var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
@@ -115,6 +185,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
         public async Task GetByPeriodo_QuandoHaTransacoes_DeveRetornarOkComLista()
         {
             // Arrange
+            var userId = Guid.NewGuid();
             var dataInicio = DateTime.Now.AddDays(-10);
             var dataFim = DateTime.Now;
             var transacoes = new List<TransacaoDTO>
@@ -123,11 +194,14 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 new TransacaoDTO { Id = Guid.NewGuid(), Descricao = "Transacao 2", Valor = 200m }
             };
 
-            _transacaoServiceMock.Setup(s => s.GetByPeriodoAsync(dataInicio, dataFim))
+            _transacaoServiceMock.Setup(s => s.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Ok(transacoes));
 
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            ConfigureControllerContext(controller, userId);
+
             // Act
-            var result = await _controller.GetByPeriodo(dataInicio, dataFim);
+            var result = await controller.GetByPeriodo(dataInicio, dataFim);
 
             // Assert
             var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
@@ -140,14 +214,18 @@ namespace ControleFinanceiro.API.Tests.Controllers
         public async Task GetByPeriodo_QuandoOcorreErro_DeveRetornarBadRequest()
         {
             // Arrange
+            var userId = Guid.NewGuid();
             var dataInicio = DateTime.Now;
             var dataFim = DateTime.Now.AddDays(-1); // Data inválida (fim antes do início)
 
-            _transacaoServiceMock.Setup(s => s.GetByPeriodoAsync(dataInicio, dataFim))
+            _transacaoServiceMock.Setup(s => s.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Fail("A data inicial não pode ser maior que a data final"));
 
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            ConfigureControllerContext(controller, userId);
+
             // Act
-            var result = await _controller.GetByPeriodo(dataInicio, dataFim);
+            var result = await controller.GetByPeriodo(dataInicio, dataFim);
 
             // Assert
             var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
@@ -160,6 +238,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
         public async Task GetByTipo_QuandoHaTransacoes_DeveRetornarOkComLista()
         {
             // Arrange
+            var userId = Guid.NewGuid();
             var tipo = 1; // Receita
             var transacoes = new List<TransacaoDTO>
             {
@@ -167,11 +246,14 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 new TransacaoDTO { Id = Guid.NewGuid(), Descricao = "Receita 2", Valor = 200m, Tipo = 1 }
             };
 
-            _transacaoServiceMock.Setup(s => s.GetByTipoAsync(tipo))
+            _transacaoServiceMock.Setup(s => s.GetByTipoAsync(tipo, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Ok(transacoes));
 
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            ConfigureControllerContext(controller, userId);
+
             // Act
-            var result = await _controller.GetByTipo(tipo);
+            var result = await controller.GetByTipo(tipo);
 
             // Assert
             var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
@@ -184,13 +266,17 @@ namespace ControleFinanceiro.API.Tests.Controllers
         public async Task GetByTipo_QuandoTipoInvalido_DeveRetornarBadRequest()
         {
             // Arrange
+            var userId = Guid.NewGuid();
             var tipoInvalido = 999;
 
-            _transacaoServiceMock.Setup(s => s.GetByTipoAsync(tipoInvalido))
+            _transacaoServiceMock.Setup(s => s.GetByTipoAsync(tipoInvalido, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Fail("Tipo de transação inválido"));
 
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            ConfigureControllerContext(controller, userId);
+
             // Act
-            var result = await _controller.GetByTipo(tipoInvalido);
+            var result = await controller.GetByTipo(tipoInvalido);
 
             // Assert
             var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
@@ -203,30 +289,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
         public async Task Create_QuandoDadosValidos_DeveRetornarCreatedAtAction()
         {
             // Arrange
-            // Configurar usuário autenticado
             var usuarioId = Guid.NewGuid();
-            var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
-            };
-            var identity = new ClaimsIdentity(claims, "TestAuth");
-            var principal = new ClaimsPrincipal(identity);
-            
-            var httpContext = new DefaultHttpContext()
-            {
-                User = principal
-            };
-            
-            var controllerContext = new ControllerContext()
-            {
-                HttpContext = httpContext
-            };
-            
-            // Usar o controller com contexto de autenticação
-            var controller = new TransacoesController(_transacaoServiceMock.Object)
-            {
-                ControllerContext = controllerContext
-            };
             
             var dto = new CreateTransacaoDTO
             {
@@ -239,6 +302,14 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var transacaoId = Guid.NewGuid();
             _transacaoServiceMock.Setup(s => s.AddAsync(It.IsAny<CreateTransacaoDTO>(), It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<Guid>.Ok(transacaoId));
+                                
+            // Configure user in UserManager
+            var user = new Usuario { Id = usuarioId, UserName = "testuser@example.com" };
+            _userManagerMock.Setup(um => um.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
+                .ReturnsAsync(user);
+                
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            ConfigureControllerContext(controller, usuarioId);
 
             // Act
             var result = await controller.Create(dto);
@@ -259,36 +330,21 @@ namespace ControleFinanceiro.API.Tests.Controllers
         public async Task Create_QuandoDadosInvalidos_DeveRetornarBadRequest()
         {
             // Arrange
-            // Configurar usuário autenticado
             var usuarioId = Guid.NewGuid();
-            var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
-            };
-            var identity = new ClaimsIdentity(claims, "TestAuth");
-            var principal = new ClaimsPrincipal(identity);
-            
-            var httpContext = new DefaultHttpContext()
-            {
-                User = principal
-            };
-            
-            var controllerContext = new ControllerContext()
-            {
-                HttpContext = httpContext
-            };
-            
-            // Usar o controller com contexto de autenticação
-            var controller = new TransacoesController(_transacaoServiceMock.Object)
-            {
-                ControllerContext = controllerContext
-            };
             
             var dto = new CreateTransacaoDTO
             {
                 // Dados inválidos - faltando campos obrigatórios
             };
-
+            
+            // Configure user in UserManager
+            var user = new Usuario { Id = usuarioId, UserName = "testuser@example.com" };
+            _userManagerMock.Setup(um => um.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
+                .ReturnsAsync(user);
+                
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            ConfigureControllerContext(controller, usuarioId);
+            
             // Simular ModelState inválido
             controller.ModelState.AddModelError("Descricao", "O campo Descrição é obrigatório");
 
@@ -306,42 +362,27 @@ namespace ControleFinanceiro.API.Tests.Controllers
         public async Task Update_QuandoDadosValidos_DeveRetornarNoContent()
         {
             // Arrange
-            // Configurar usuário autenticado
             var usuarioId = Guid.NewGuid();
-            var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
-            };
-            var identity = new ClaimsIdentity(claims, "TestAuth");
-            var principal = new ClaimsPrincipal(identity);
-            
-            var httpContext = new DefaultHttpContext()
-            {
-                User = principal
-            };
-            
-            var controllerContext = new ControllerContext()
-            {
-                HttpContext = httpContext
-            };
-            
-            // Usar o controller com contexto de autenticação
-            var controller = new TransacoesController(_transacaoServiceMock.Object)
-            {
-                ControllerContext = controllerContext
-            };
             
             var id = Guid.NewGuid();
             var dto = new UpdateTransacaoDTO
             {
-                Tipo = 1,
-                Data = DateTime.Now,
-                Descricao = "Teste Atualizado",
-                Valor = 150m
+                Descricao = "Transacao Atualizada",
+                Valor = 200m,
+                Tipo = 2,
+                Data = DateTime.Now
             };
 
-            _transacaoServiceMock.Setup(s => s.UpdateAsync(It.IsAny<Guid>(), It.IsAny<UpdateTransacaoDTO>(), It.IsAny<Guid?>()))
+            _transacaoServiceMock.Setup(s => s.UpdateAsync(id, It.IsAny<UpdateTransacaoDTO>(), It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<bool>.Ok(true));
+                                
+            // Configure user in UserManager
+            var user = new Usuario { Id = usuarioId, UserName = "testuser@example.com" };
+            _userManagerMock.Setup(um => um.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
+                .ReturnsAsync(user);
+                
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            ConfigureControllerContext(controller, usuarioId);
 
             // Act
             var result = await controller.Update(id, dto);
@@ -353,13 +394,14 @@ namespace ControleFinanceiro.API.Tests.Controllers
             returnedResult.Data.Should().BeTrue();
             
             // Verificar que o usuarioId foi passado para o serviço
-            _transacaoServiceMock.Verify(s => s.UpdateAsync(id, dto, usuarioId), Times.Once);
+            _transacaoServiceMock.Verify(s => s.UpdateAsync(id, It.IsAny<UpdateTransacaoDTO>(), usuarioId), Times.Once);
         }
 
         [Fact]
         public async Task Update_QuandoTransacaoNaoExiste_DeveRetornarNotFound()
         {
             // Arrange
+            var usuarioId = Guid.NewGuid();
             var id = Guid.NewGuid();
             var updateDto = new UpdateTransacaoDTO
             {
@@ -369,30 +411,19 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 Data = DateTime.Now.AddDays(-1)
             };
 
-            // Configurando o mock para simular o usuário autenticado
-            var usuarioId = Guid.NewGuid();
-            var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
-            };
-            var identity = new ClaimsIdentity(claims, "TestAuth");
-            var principal = new ClaimsPrincipal(identity);
-            
-            var httpContext = new DefaultHttpContext()
-            {
-                User = principal
-            };
-            
-            _controller.ControllerContext = new ControllerContext()
-            {
-                HttpContext = httpContext
-            };
-
-            _transacaoServiceMock.Setup(s => s.UpdateAsync(id, updateDto, It.IsAny<Guid?>()))
+            _transacaoServiceMock.Setup(s => s.UpdateAsync(id, It.IsAny<UpdateTransacaoDTO>(), It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<bool>.Fail("Transação não encontrada"));
+                                
+            // Configure user in UserManager
+            var user = new Usuario { Id = usuarioId, UserName = "testuser@example.com" };
+            _userManagerMock.Setup(um => um.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
+                .ReturnsAsync(user);
+                
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object);
+            ConfigureControllerContext(controller, usuarioId);
 
             // Act
-            var result = await _controller.Update(id, updateDto);
+            var result = await controller.Update(id, updateDto);
 
             // Assert
             var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
@@ -425,7 +456,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             };
             
             // Usar o controller com contexto de autenticação
-            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object)
             {
                 ControllerContext = controllerContext
             };
@@ -511,7 +542,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 HttpContext = httpContext
             };
             
-            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object)
             {
                 ControllerContext = controllerContext
             };
@@ -537,7 +568,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 HttpContext = httpContext
             };
             
-            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object)
             {
                 ControllerContext = controllerContext
             };
@@ -545,7 +576,10 @@ namespace ControleFinanceiro.API.Tests.Controllers
             // Act
             var method = typeof(TransacoesController).GetMethod("ObterUsuarioIdLogado", 
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var result = method.Invoke(controller, null) as Guid?;
+            
+            method.Should().NotBeNull("ObterUsuarioIdLogado method should exist");
+            
+            var result = method?.Invoke(controller, null) as Guid?;
 
             // Assert
             result.Should().BeNull();
@@ -573,7 +607,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 HttpContext = httpContext
             };
             
-            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object)
             {
                 ControllerContext = controllerContext
             };
@@ -619,7 +653,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 HttpContext = httpContext
             };
             
-            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object)
             {
                 ControllerContext = controllerContext
             };

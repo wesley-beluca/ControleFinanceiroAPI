@@ -156,7 +156,7 @@ namespace ControleFinanceiro.Application.Tests.Services
                 new Transacao(TipoTransacao.Despesa, DateTime.Now.AddDays(-8), "Despesa", 50m)
             };
             
-            _repositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim))
+            _repositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                           .ReturnsAsync(transacoes);
 
             // Act
@@ -195,8 +195,8 @@ namespace ControleFinanceiro.Application.Tests.Services
                 new Transacao(TipoTransacao.Receita, DateTime.Now.AddDays(-3), "Receita 2", 200m)
             };
             
-            _repositoryMock.Setup(r => r.GetByTipoAsync(TipoTransacao.Receita))
-                          .ReturnsAsync(transacoes);
+            _repositoryMock.Setup(r => r.GetByTipoAsync(TipoTransacao.Receita, It.IsAny<Guid?>()))
+                           .ReturnsAsync(transacoes);
 
             // Act
             var result = await _service.GetByTipoAsync(tipo);

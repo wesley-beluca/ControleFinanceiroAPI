@@ -58,7 +58,7 @@ namespace ControleFinanceiro.Application.Tests.Services
             var dataInicio = DateTime.Now.AddDays(-10);
             var dataFim = DateTime.Now;
             
-            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim))
+            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                    .ReturnsAsync(new List<Transacao>());
 
             // Act
@@ -88,7 +88,7 @@ namespace ControleFinanceiro.Application.Tests.Services
                 new Transacao(TipoTransacao.Despesa, DateTime.Now.AddDays(-2), "Supermercado", 400m)
             };
             
-            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim))
+            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                    .ReturnsAsync(transacoes);
 
             // Act
@@ -117,7 +117,7 @@ namespace ControleFinanceiro.Application.Tests.Services
                 new Transacao(TipoTransacao.Despesa, DateTime.Now.AddDays(-2), "Supermercado", 500m)
             };
             
-            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim))
+            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                    .ReturnsAsync(transacoes);
 
             // Act
@@ -148,7 +148,7 @@ namespace ControleFinanceiro.Application.Tests.Services
             // Marcando a transação de despesa como excluída
             transacoes[1].MarcarComoExcluido();
             
-            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim))
+            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                    .ReturnsAsync(transacoes);
 
             // Act

@@ -1,6 +1,7 @@
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
 using ControleFinanceiro.Infrastructure.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Moq;
 using System;
@@ -14,6 +15,7 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
     {
         private readonly Mock<IUsuarioRepository> _mockUsuarioRepository;
         private readonly Mock<IConfiguration> _mockConfiguration;
+        private readonly Mock<UserManager<Usuario>> _mockUserManager;
         private readonly AuthService _authService;
 
         public AuthServiceTests()
@@ -21,12 +23,15 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             _mockUsuarioRepository = new Mock<IUsuarioRepository>();
             _mockConfiguration = new Mock<IConfiguration>();
             
-            // Configurar JWT para testes
+            // Setup for UserManager mock
+            var userStoreMock = new Mock<IUserStore<Usuario>>();
+            _mockUserManager = new Mock<UserManager<Usuario>>(userStoreMock.Object, null, null, null, null, null, null, null, null);
+            
             _mockConfiguration.Setup(x => x["Jwt:Key"]).Returns("chave_secreta_para_testes_unitarios_1234567890");
             _mockConfiguration.Setup(x => x["Jwt:Issuer"]).Returns("teste_issuer");
             _mockConfiguration.Setup(x => x["Jwt:Audience"]).Returns("teste_audience");
             
-            _authService = new AuthService(_mockUsuarioRepository.Object, _mockConfiguration.Object);
+            _authService = new AuthService(_mockUsuarioRepository.Object, _mockConfiguration.Object, _mockUserManager.Object);
         }
 
         [Fact]
@@ -143,8 +148,9 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             typeof(Usuario).GetProperty("ResetPasswordToken")
                 .SetValue(usuario, token);
                 
-            typeof(Usuario).GetProperty("ResetPasswordTokenExpiration")
-                .SetValue(usuario, DateTime.Now.AddHours(-1)); // Token expirado (expirou há 1 hora)
+            var expirationProperty = typeof(Usuario).GetProperty("ResetPasswordTokenExpiration");
+            if (expirationProperty != null)
+                expirationProperty.SetValue(usuario, DateTime.Now.AddHours(-1)); // Token expirado (expirou há 1 hora)
             
             _mockUsuarioRepository.Setup(x => x.ObterPorResetTokenAsync(token))
                 .ReturnsAsync(usuario);
@@ -154,7 +160,7 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             
             // Assert
             Assert.False(resultado.sucesso);
-            Assert.Equal("Token expirado ou inválido", resultado.mensagem);
+            Assert.Equal("Token expirado", resultado.mensagem);
             _mockUsuarioRepository.Verify(x => x.AtualizarAsync(It.IsAny<Usuario>()), Times.Never);
         }
     }
