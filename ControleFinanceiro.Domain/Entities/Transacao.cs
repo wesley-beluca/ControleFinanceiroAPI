@@ -11,19 +11,23 @@ namespace ControleFinanceiro.Domain.Entities
         public DateTime Data { get; private set; }
         public string Descricao { get; private set; }
         public decimal Valor { get; private set; }
+        
+        public Guid? UsuarioId { get; private set; }
+        public Usuario Usuario { get; private set; }
 
         // Construtor para EF Core
         protected Transacao() : base()
         {
         }
 
-        public Transacao(TipoTransacao tipo, DateTime data, string descricao, decimal valor) : base()
+        public Transacao(TipoTransacao tipo, DateTime data, string descricao, decimal valor, Guid? usuarioId = null) : base()
         {
             // Validações via métodos
             SetTipo(tipo);
             SetData(data);
             SetDescricao(descricao);
             SetValor(valor);
+            UsuarioId = usuarioId;
         }
 
         // Métodos para atualização de propriedades
@@ -85,5 +89,15 @@ namespace ControleFinanceiro.Domain.Entities
             Valor = valor;
             AtualizarDataModificacao();
         }
+        
+        /// <summary>
+        /// Define ou altera o usuário associado à transação
+        /// </summary>
+        /// <param name="usuarioId">ID do usuário ou null para remover associação</param>
+        public void SetUsuario(Guid? usuarioId)
+        {
+            UsuarioId = usuarioId;
+            AtualizarDataModificacao();
+        }
     }
-} 
+}

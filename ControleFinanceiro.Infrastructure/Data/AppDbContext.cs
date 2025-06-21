@@ -15,6 +15,7 @@ namespace ControleFinanceiro.Infrastructure.Data
         }
 
         public DbSet<Transacao> Transacoes { get; set; }
+        public DbSet<Usuario> Usuarios { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -41,9 +42,36 @@ namespace ControleFinanceiro.Infrastructure.Data
                 entity.Property(e => e.Valor).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.Data).IsRequired();
                 entity.Property(e => e.Tipo).IsRequired();
+                entity.Property(e => e.UsuarioId).IsRequired(false);
+                
+                // Relacionamento com Usuario (opcional)
+                entity.HasOne(t => t.Usuario)
+                      .WithMany()
+                      .HasForeignKey(t => t.UsuarioId)
+                      .IsRequired(false)
+                      .OnDelete(DeleteBehavior.SetNull);
                 
                 // Filtro global para excluir registros marcados como excluídos
                 entity.HasQueryFilter(t => !t.Excluido);
+            });
+
+            modelBuilder.Entity<Usuario>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Username).IsRequired().HasMaxLength(Usuario.USERNAME_MAX_LENGTH);
+                entity.Property(e => e.Email).IsRequired().HasMaxLength(Usuario.EMAIL_MAX_LENGTH);
+                entity.Property(e => e.PasswordHash).IsRequired();
+                entity.Property(e => e.Role).IsRequired();
+                entity.Property(e => e.ResetPasswordToken).IsRequired(false);
+                entity.Property(e => e.ResetPasswordTokenExpiration).IsRequired(false);
+                
+                // Índices para busca rápida
+                entity.HasIndex(e => e.Username).IsUnique();
+                entity.HasIndex(e => e.Email).IsUnique();
+                entity.HasIndex(e => e.ResetPasswordToken);
+                
+                // Filtro global para excluir registros marcados como excluídos
+                entity.HasQueryFilter(u => !u.Excluido);
             });
         }
 
