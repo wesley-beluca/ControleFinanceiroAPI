@@ -1,6 +1,6 @@
 # Controle Financeiro Pessoal
 
-API para controle financeiro pessoal desenvolvida em .NET 8, seguindo arquitetura em camadas e princípios de injeção de dependência.
+API para controle financeiro pessoal desenvolvida em .NET 8, seguindo arquitetura em camadas e princípios de injeção de dependência. Inclui sistema completo de autenticação com JWT e gerenciamento de usuários.
 
 ## Tecnologias Utilizadas
 
@@ -8,6 +8,8 @@ API para controle financeiro pessoal desenvolvida em .NET 8, seguindo arquitetur
 - Entity Framework Core
 - SQL Server
 - Swagger
+- JWT (JSON Web Tokens)
+- SMTP para envio de emails
 
 ## Estrutura do Projeto
 
@@ -23,6 +25,10 @@ O projeto segue uma arquitetura em camadas:
 - Cadastro, edição, exclusão e consulta de transações financeiras
 - Filtro de transações por período e tipo (receita/despesa)
 - Geração de resumo financeiro com fluxo de caixa diário
+- Sistema completo de autenticação com JWT
+- Registro e login de usuários
+- Recuperação de senha via email
+- Associação de transações a usuários específicos
 
 ## Como Executar
 
@@ -133,6 +139,13 @@ O Docker Compose irá carregar as variáveis de ambiente do arquivo `.env` autom
 ### Resumo Financeiro
 
 - `GET /api/resumofinanceiro?dataInicio={data}&dataFim={data}`: Gera um resumo financeiro para o período especificado
+
+### Autenticação
+
+- `POST /auth/login`: Autenticação de usuário
+- `POST /auth/register`: Registro de novo usuário
+- `POST /auth/forgot-password`: Solicita redefinição de senha
+- `POST /auth/reset-password`: Redefine a senha com o token recebido por email
 
 ## Frontend
 
