@@ -1,15 +1,18 @@
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Domain.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace ControleFinanceiro.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class TransacoesController : ControllerBase
     {
         private readonly ITransacaoService _transacaoService;
@@ -55,7 +58,10 @@ namespace ControleFinanceiro.API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var result = await _transacaoService.AddAsync(transacaoDto);
+            // Obtém o ID do usuário logado
+            Guid? usuarioId = ObterUsuarioIdLogado();
+
+            var result = await _transacaoService.AddAsync(transacaoDto, usuarioId);
             return result.Success 
                 ? CreatedAtAction(nameof(GetById), new { id = result.Data }, result)
                 : BadRequest(result);
@@ -67,7 +73,10 @@ namespace ControleFinanceiro.API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var result = await _transacaoService.UpdateAsync(id, transacaoDto);
+            // Obtém o ID do usuário logado
+            Guid? usuarioId = ObterUsuarioIdLogado();
+
+            var result = await _transacaoService.UpdateAsync(id, transacaoDto, usuarioId);
             return Ok(result);
         }
 
@@ -77,5 +86,27 @@ namespace ControleFinanceiro.API.Controllers
             var result = await _transacaoService.DeleteAsync(id);
             return Ok(result);
         }
+
+        /// <summary>
+        /// Obtém o ID do usuário logado a partir do token JWT
+        /// </summary>
+        /// <returns>ID do usuário ou null se não estiver autenticado</returns>
+        private Guid? ObterUsuarioIdLogado()
+        {
+            // Verifica se o usuário está autenticado
+            if (!User.Identity.IsAuthenticated)
+                return null;
+
+            // Obtém o claim com o ID do usuário
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || string.IsNullOrEmpty(userIdClaim.Value))
+                return null;
+
+            // Converte o ID para Guid
+            if (Guid.TryParse(userIdClaim.Value, out Guid userId))
+                return userId;
+
+            return null;
+        }
     }
-} 
+}

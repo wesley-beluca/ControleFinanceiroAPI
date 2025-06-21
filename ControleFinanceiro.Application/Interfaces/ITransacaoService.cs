@@ -12,8 +12,8 @@ namespace ControleFinanceiro.Application.Interfaces
         Task<Result<IEnumerable<TransacaoDTO>>> GetAllAsync();
         Task<Result<IEnumerable<TransacaoDTO>>> GetByPeriodoAsync(DateTime dataInicio, DateTime dataFim);
         Task<Result<IEnumerable<TransacaoDTO>>> GetByTipoAsync(int tipo);
-        Task<Result<Guid>> AddAsync(CreateTransacaoDTO transacaoDto);
-        Task<Result<bool>> UpdateAsync(Guid id, UpdateTransacaoDTO transacaoDto);
+        Task<Result<Guid>> AddAsync(CreateTransacaoDTO transacaoDto, Guid? usuarioId = null);
+        Task<Result<bool>> UpdateAsync(Guid id, UpdateTransacaoDTO transacaoDto, Guid? usuarioId = null);
         Task<Result<bool>> DeleteAsync(Guid id);
     }
 } 

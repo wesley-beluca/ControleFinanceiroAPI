@@ -78,7 +78,7 @@ namespace ControleFinanceiro.Application.Services
             return Result<IEnumerable<TransacaoDTO>>.Ok(transacoesDto);
         }
 
-        public async Task<Result<Guid>> AddAsync(CreateTransacaoDTO transacaoDto)
+        public async Task<Result<Guid>> AddAsync(CreateTransacaoDTO transacaoDto, Guid? usuarioId = null)
         {
             // Validação do DTO usando FluentValidation
             var validationResult = await _createTransacaoValidator.ValidateAsync(transacaoDto);
@@ -94,12 +94,13 @@ namespace ControleFinanceiro.Application.Services
 
             try
             {
-                // Criação da entidade com validações internas
+                // Criação da entidade
                 Transacao transacao = new Transacao(
                     (TipoTransacao)transacaoDto.Tipo,
                     transacaoDto.Data,
                     transacaoDto.Descricao,
-                    transacaoDto.Valor
+                    transacaoDto.Valor,
+                    usuarioId
                 );
 
                 // Persistência
@@ -116,7 +117,7 @@ namespace ControleFinanceiro.Application.Services
             }
         }
 
-        public async Task<Result<bool>> UpdateAsync(Guid id, UpdateTransacaoDTO transacaoDto)
+        public async Task<Result<bool>> UpdateAsync(Guid id, UpdateTransacaoDTO transacaoDto, Guid? usuarioId = null)
         {
             // Validação do DTO usando FluentValidation
             var validationResult = await _updateTransacaoValidator.ValidateAsync(transacaoDto);
@@ -143,7 +144,7 @@ namespace ControleFinanceiro.Application.Services
                     return Result<bool>.Fail($"Transação com ID {id} não encontrada");
 
                 // Atualiza os dados da transação de forma mais limpa
-                Result<bool> resultadoAtualizacao = AtualizarDadosTransacao(transacao, transacaoDto);
+                Result<bool> resultadoAtualizacao = AtualizarDadosTransacao(transacao, transacaoDto, usuarioId);
                 if (!resultadoAtualizacao.Success)
                     return resultadoAtualizacao;
 
@@ -157,7 +158,7 @@ namespace ControleFinanceiro.Application.Services
             }
         }
 
-        private Result<bool> AtualizarDadosTransacao(Transacao transacao, UpdateTransacaoDTO transacaoDto)
+        private Result<bool> AtualizarDadosTransacao(Transacao transacao, UpdateTransacaoDTO transacaoDto, Guid? usuarioId = null)
         {
             List<string> errors = new List<string>();
 
@@ -178,6 +179,7 @@ namespace ControleFinanceiro.Application.Services
             ExecutarAcaoSegura(() => transacao.SetData(transacaoDto.Data), "Data");
             ExecutarAcaoSegura(() => transacao.SetDescricao(transacaoDto.Descricao), "Descrição");
             ExecutarAcaoSegura(() => transacao.SetValor(transacaoDto.Valor), "Valor");
+            ExecutarAcaoSegura(() => transacao.SetUsuario(usuarioId), "Usuário");
 
             if (errors.Count > 0)
                 return Result<bool>.Fail(errors);
@@ -215,7 +217,8 @@ namespace ControleFinanceiro.Application.Services
                 Descricao = transacao.Descricao,
                 Valor = transacao.Valor,
                 DataInclusao = transacao.DataInclusao,
-                DataAlteracao = transacao.DataAlteracao
+                DataAlteracao = transacao.DataAlteracao,
+                UsuarioId = transacao.UsuarioId
             };
         }
     }

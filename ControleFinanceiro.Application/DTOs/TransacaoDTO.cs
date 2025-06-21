@@ -12,5 +12,6 @@ namespace ControleFinanceiro.Application.DTOs
         public decimal Valor { get; set; }
         public DateTime DataInclusao { get; set; }
         public DateTime? DataAlteracao { get; set; }
+        public Guid? UsuarioId { get; set; }
     }
 } 

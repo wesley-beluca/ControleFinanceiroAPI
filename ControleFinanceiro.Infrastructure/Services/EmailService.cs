@@ -42,7 +42,7 @@ namespace ControleFinanceiro.Infrastructure.Services
             _baseUrl = _configuration["BaseUrl"];
         }
 
-        public async Task<bool> EnviarEmailAsync(string destinatario, string assunto, string corpo)
+        public virtual async Task<bool> EnviarEmailAsync(string destinatario, string assunto, string corpo)
         {
             try
             {
@@ -74,7 +74,7 @@ namespace ControleFinanceiro.Infrastructure.Services
             }
         }
 
-        public async Task<bool> EnviarEmailResetSenhaAsync(string destinatario, string token, string username)
+        public virtual async Task<bool> EnviarEmailResetSenhaAsync(string destinatario, string token, string username)
         {
             // URL para a página de redefinição de senha no frontend
             var resetUrl = $"{_baseUrl}/reset-password?token={token}";

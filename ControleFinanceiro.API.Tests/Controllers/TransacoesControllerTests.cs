@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using ControleFinanceiro.API.Controllers;
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Domain.Entities;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Xunit;
@@ -201,87 +203,157 @@ namespace ControleFinanceiro.API.Tests.Controllers
         public async Task Create_QuandoDadosValidos_DeveRetornarCreatedAtAction()
         {
             // Arrange
-            var createDto = new CreateTransacaoDTO
+            // Configurar usuário autenticado
+            var usuarioId = Guid.NewGuid();
+            var claims = new List<Claim>
             {
-                Descricao = "Nova Transacao",
-                Valor = 300m,
-                Tipo = 0,
-                Data = DateTime.Now.AddDays(-1)
+                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
+            };
+            var identity = new ClaimsIdentity(claims, "TestAuth");
+            var principal = new ClaimsPrincipal(identity);
+            
+            var httpContext = new DefaultHttpContext()
+            {
+                User = principal
             };
             
-            var novoId = Guid.NewGuid();
+            var controllerContext = new ControllerContext()
+            {
+                HttpContext = httpContext
+            };
+            
+            // Usar o controller com contexto de autenticação
+            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            {
+                ControllerContext = controllerContext
+            };
+            
+            var dto = new CreateTransacaoDTO
+            {
+                Tipo = 1,
+                Data = DateTime.Now,
+                Descricao = "Teste",
+                Valor = 100m
+            };
 
-            _transacaoServiceMock.Setup(s => s.AddAsync(createDto))
-                                .ReturnsAsync(Result<Guid>.Ok(novoId));
+            var transacaoId = Guid.NewGuid();
+            _transacaoServiceMock.Setup(s => s.AddAsync(It.IsAny<CreateTransacaoDTO>(), It.IsAny<Guid?>()))
+                                .ReturnsAsync(Result<Guid>.Ok(transacaoId));
 
             // Act
-            var result = await _controller.Create(createDto);
+            var result = await controller.Create(dto);
 
             // Assert
             var createdAtActionResult = result.Result.Should().BeOfType<CreatedAtActionResult>().Subject;
-            createdAtActionResult.ActionName.Should().Be(nameof(TransacoesController.GetById));
-            createdAtActionResult.RouteValues["id"].Should().Be(novoId);
             var returnedResult = createdAtActionResult.Value.Should().BeAssignableTo<Result<Guid>>().Subject;
             returnedResult.Success.Should().BeTrue();
-            returnedResult.Data.Should().Be(novoId);
+            returnedResult.Data.Should().Be(transacaoId);
+            createdAtActionResult.ActionName.Should().Be(nameof(TransacoesController.GetById));
+            createdAtActionResult.RouteValues["id"].Should().Be(transacaoId);
+            
+            // Verificar que o usuarioId foi passado para o serviço
+            _transacaoServiceMock.Verify(s => s.AddAsync(dto, usuarioId), Times.Once);
         }
 
         [Fact]
         public async Task Create_QuandoDadosInvalidos_DeveRetornarBadRequest()
         {
             // Arrange
-            var createDto = new CreateTransacaoDTO
+            // Configurar usuário autenticado
+            var usuarioId = Guid.NewGuid();
+            var claims = new List<Claim>
             {
-                Descricao = "",  // Inválido
-                Valor = 0,       // Inválido
-                Tipo = 0,
-                Data = DateTime.Now.AddDays(-1)
+                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
+            };
+            var identity = new ClaimsIdentity(claims, "TestAuth");
+            var principal = new ClaimsPrincipal(identity);
+            
+            var httpContext = new DefaultHttpContext()
+            {
+                User = principal
             };
             
-            var errors = new List<string>
+            var controllerContext = new ControllerContext()
             {
-                "A descrição da transação é obrigatória",
-                "O valor da transação deve ser maior que zero"
+                HttpContext = httpContext
+            };
+            
+            // Usar o controller com contexto de autenticação
+            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            {
+                ControllerContext = controllerContext
+            };
+            
+            var dto = new CreateTransacaoDTO
+            {
+                // Dados inválidos - faltando campos obrigatórios
             };
 
-            _transacaoServiceMock.Setup(s => s.AddAsync(createDto))
-                                .ReturnsAsync(Result<Guid>.Fail(errors));
+            // Simular ModelState inválido
+            controller.ModelState.AddModelError("Descricao", "O campo Descrição é obrigatório");
 
             // Act
-            var result = await _controller.Create(createDto);
+            var result = await controller.Create(dto);
 
             // Assert
-            var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-            badRequestResult.Value.Should().NotBeNull();
-            var returnedResult = badRequestResult.Value.Should().BeAssignableTo<Result<Guid>>().Subject;
-            returnedResult.Success.Should().BeFalse();
-            returnedResult.Errors.Should().BeEquivalentTo(errors);
+            result.Result.Should().BeOfType<BadRequestObjectResult>();
+            
+            // Verificar que o serviço não foi chamado
+            _transacaoServiceMock.Verify(s => s.AddAsync(It.IsAny<CreateTransacaoDTO>(), It.IsAny<Guid?>()), Times.Never);
         }
 
         [Fact]
         public async Task Update_QuandoDadosValidos_DeveRetornarNoContent()
         {
             // Arrange
-            var id = Guid.NewGuid();
-            var updateDto = new UpdateTransacaoDTO
+            // Configurar usuário autenticado
+            var usuarioId = Guid.NewGuid();
+            var claims = new List<Claim>
             {
-                Descricao = "Transacao Atualizada",
-                Valor = 150m,
+                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
+            };
+            var identity = new ClaimsIdentity(claims, "TestAuth");
+            var principal = new ClaimsPrincipal(identity);
+            
+            var httpContext = new DefaultHttpContext()
+            {
+                User = principal
+            };
+            
+            var controllerContext = new ControllerContext()
+            {
+                HttpContext = httpContext
+            };
+            
+            // Usar o controller com contexto de autenticação
+            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            {
+                ControllerContext = controllerContext
+            };
+            
+            var id = Guid.NewGuid();
+            var dto = new UpdateTransacaoDTO
+            {
                 Tipo = 1,
-                Data = DateTime.Now.AddDays(-1)
+                Data = DateTime.Now,
+                Descricao = "Teste Atualizado",
+                Valor = 150m
             };
 
-            _transacaoServiceMock.Setup(s => s.UpdateAsync(id, updateDto))
+            _transacaoServiceMock.Setup(s => s.UpdateAsync(It.IsAny<Guid>(), It.IsAny<UpdateTransacaoDTO>(), It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<bool>.Ok(true));
 
             // Act
-            var result = await _controller.Update(id, updateDto);
+            var result = await controller.Update(id, dto);
 
             // Assert
             var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
             var returnedResult = okResult.Value.Should().BeAssignableTo<Result<bool>>().Subject;
             returnedResult.Success.Should().BeTrue();
             returnedResult.Data.Should().BeTrue();
+            
+            // Verificar que o usuarioId foi passado para o serviço
+            _transacaoServiceMock.Verify(s => s.UpdateAsync(id, dto, usuarioId), Times.Once);
         }
 
         [Fact]
@@ -297,7 +369,26 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 Data = DateTime.Now.AddDays(-1)
             };
 
-            _transacaoServiceMock.Setup(s => s.UpdateAsync(id, updateDto))
+            // Configurando o mock para simular o usuário autenticado
+            var usuarioId = Guid.NewGuid();
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
+            };
+            var identity = new ClaimsIdentity(claims, "TestAuth");
+            var principal = new ClaimsPrincipal(identity);
+            
+            var httpContext = new DefaultHttpContext()
+            {
+                User = principal
+            };
+            
+            _controller.ControllerContext = new ControllerContext()
+            {
+                HttpContext = httpContext
+            };
+
+            _transacaoServiceMock.Setup(s => s.UpdateAsync(id, updateDto, It.IsAny<Guid?>()))
                                 .ReturnsAsync(Result<bool>.Fail("Transação não encontrada"));
 
             // Act
@@ -314,32 +405,48 @@ namespace ControleFinanceiro.API.Tests.Controllers
         public async Task Update_QuandoDadosInvalidos_DeveRetornarBadRequest()
         {
             // Arrange
+            // Configurar usuário autenticado
+            var usuarioId = Guid.NewGuid();
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
+            };
+            var identity = new ClaimsIdentity(claims, "TestAuth");
+            var principal = new ClaimsPrincipal(identity);
+            
+            var httpContext = new DefaultHttpContext()
+            {
+                User = principal
+            };
+            
+            var controllerContext = new ControllerContext()
+            {
+                HttpContext = httpContext
+            };
+            
+            // Usar o controller com contexto de autenticação
+            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            {
+                ControllerContext = controllerContext
+            };
+            
             var id = Guid.NewGuid();
-            var updateDto = new UpdateTransacaoDTO
+            var dto = new UpdateTransacaoDTO
             {
-                Descricao = "",  // Inválido
-                Valor = 0,       // Inválido
-                Tipo = 0,
-                Data = DateTime.Now.AddDays(-1)
+                // Dados inválidos - faltando campos obrigatórios
             };
 
-            var errors = new List<string>
-            {
-                "A descrição da transação é obrigatória",
-                "O valor da transação deve ser maior que zero"
-            };
-
-            _transacaoServiceMock.Setup(s => s.UpdateAsync(id, updateDto))
-                                .ReturnsAsync(Result<bool>.Fail(errors));
+            // Simular ModelState inválido
+            controller.ModelState.AddModelError("Descricao", "O campo Descrição é obrigatório");
 
             // Act
-            var result = await _controller.Update(id, updateDto);
+            var result = await controller.Update(id, dto);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<bool>>().Subject;
-            returnedResult.Success.Should().BeFalse();
-            returnedResult.Errors.Should().BeEquivalentTo(errors);
+            result.Result.Should().BeOfType<BadRequestObjectResult>();
+            
+            // Verificar que o serviço não foi chamado
+            _transacaoServiceMock.Verify(s => s.UpdateAsync(It.IsAny<Guid>(), It.IsAny<UpdateTransacaoDTO>(), It.IsAny<Guid?>()), Times.Never);
         }
 
         [Fact]
@@ -379,5 +486,161 @@ namespace ControleFinanceiro.API.Tests.Controllers
             returnedResult.Success.Should().BeFalse();
             returnedResult.Message.Should().Be("Transação não encontrada");
         }
+
+        [Fact]
+        public void ObterUsuarioIdLogado_QuandoUsuarioAutenticado_DeveRetornarUsuarioId()
+        {
+            // Arrange
+            var usuarioId = Guid.NewGuid();
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString()),
+                new Claim(ClaimTypes.Name, "usuario@teste.com")
+            };
+            var identity = new ClaimsIdentity(claims, "TestAuth");
+            var principal = new ClaimsPrincipal(identity);
+            
+            // Configurando o HttpContext com o usuário autenticado
+            var httpContext = new DefaultHttpContext()
+            {
+                User = principal
+            };
+            
+            var controllerContext = new ControllerContext()
+            {
+                HttpContext = httpContext
+            };
+            
+            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            {
+                ControllerContext = controllerContext
+            };
+
+            // Act
+            var method = typeof(TransacoesController).GetMethod("ObterUsuarioIdLogado", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var result = method.Invoke(controller, null) as Guid?;
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Value.Should().Be(usuarioId);
+        }
+        
+        [Fact]
+        public void ObterUsuarioIdLogado_QuandoUsuarioNaoAutenticado_DeveRetornarNull()
+        {
+            // Arrange
+            var httpContext = new DefaultHttpContext(); // Usuário não autenticado
+            
+            var controllerContext = new ControllerContext()
+            {
+                HttpContext = httpContext
+            };
+            
+            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            {
+                ControllerContext = controllerContext
+            };
+
+            // Act
+            var method = typeof(TransacoesController).GetMethod("ObterUsuarioIdLogado", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var result = method.Invoke(controller, null) as Guid?;
+
+            // Assert
+            result.Should().BeNull();
+        }
+        
+        [Fact]
+        public async Task Create_QuandoUsuarioAutenticado_DevePassarUsuarioIdParaServico()
+        {
+            // Arrange
+            var usuarioId = Guid.NewGuid();
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
+            };
+            var identity = new ClaimsIdentity(claims, "TestAuth");
+            var principal = new ClaimsPrincipal(identity);
+            
+            var httpContext = new DefaultHttpContext()
+            {
+                User = principal
+            };
+            
+            var controllerContext = new ControllerContext()
+            {
+                HttpContext = httpContext
+            };
+            
+            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            {
+                ControllerContext = controllerContext
+            };
+            
+            var dto = new CreateTransacaoDTO
+            {
+                Tipo = 1,
+                Data = DateTime.Now,
+                Descricao = "Teste com usuário",
+                Valor = 100m
+            };
+            
+            var transacaoId = Guid.NewGuid();
+            _transacaoServiceMock.Setup(s => s.AddAsync(It.IsAny<CreateTransacaoDTO>(), It.IsAny<Guid?>()))
+                                .ReturnsAsync(Result<Guid>.Ok(transacaoId));
+
+            // Act
+            await controller.Create(dto);
+
+            // Assert
+            _transacaoServiceMock.Verify(s => s.AddAsync(dto, usuarioId), Times.Once);
+        }
+        
+        [Fact]
+        public async Task Update_QuandoUsuarioAutenticado_DevePassarUsuarioIdParaServico()
+        {
+            // Arrange
+            var usuarioId = Guid.NewGuid();
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
+            };
+            var identity = new ClaimsIdentity(claims, "TestAuth");
+            var principal = new ClaimsPrincipal(identity);
+            
+            var httpContext = new DefaultHttpContext()
+            {
+                User = principal
+            };
+            
+            var controllerContext = new ControllerContext()
+            {
+                HttpContext = httpContext
+            };
+            
+            var controller = new TransacoesController(_transacaoServiceMock.Object)
+            {
+                ControllerContext = controllerContext
+            };
+            
+            var id = Guid.NewGuid();
+            var dto = new UpdateTransacaoDTO
+            {
+                Tipo = 1,
+                Data = DateTime.Now,
+                Descricao = "Teste com usuário",
+                Valor = 100m
+            };
+            
+            _transacaoServiceMock.Setup(s => s.UpdateAsync(It.IsAny<Guid>(), It.IsAny<UpdateTransacaoDTO>(), It.IsAny<Guid?>()))
+                                .ReturnsAsync(Result<bool>.Ok(true));
+
+            // Act
+            await controller.Update(id, dto);
+
+            // Assert
+            _transacaoServiceMock.Verify(s => s.UpdateAsync(id, dto, usuarioId), Times.Once);
+        }
     }
-} 
+}

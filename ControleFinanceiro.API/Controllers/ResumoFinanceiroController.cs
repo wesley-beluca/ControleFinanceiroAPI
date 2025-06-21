@@ -1,6 +1,7 @@
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Domain.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
@@ -9,6 +10,8 @@ namespace ControleFinanceiro.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
+
     public class ResumoFinanceiroController : ControllerBase
     {
         private readonly IResumoFinanceiroService _resumoFinanceiroService;

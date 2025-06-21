@@ -293,10 +293,97 @@ namespace ControleFinanceiro.Application.Tests.Services
             _repositoryMock.Verify(r => r.AddAsync(It.Is<Transacao>(t =>
                 t.Tipo == TipoTransacao.Receita &&
                 t.Descricao == dto.Descricao &&
-                t.Valor == dto.Valor
+                t.Valor == dto.Valor &&
+                t.UsuarioId == null
             )), Times.Once);
         }
+        
+        [Fact]
+        public async Task AddAsync_QuandoDadosValidosComUsuario_DeveCriarTransacaoComUsuario()
+        {
+            // Arrange
+            var dto = new CreateTransacaoDTO
+            {
+                Tipo = (int)TipoTransacao.Receita,
+                Data = DateTime.Now.AddDays(-1),
+                Descricao = "Teste",
+                Valor = 100m
+            };
+            
+            var usuarioId = Guid.NewGuid();
+            var validationResult = new ValidationResult();  // Validação passa
+            var transacaoId = Guid.NewGuid();
+            
+            // Configurando o validador de teste
+            _createTransacaoValidator.SetValidationResult(validationResult);
+            
+            _repositoryMock.Setup(r => r.AddAsync(It.IsAny<Transacao>()))
+                          .ReturnsAsync(transacaoId);
 
+            // Act
+            var result = await _service.AddAsync(dto, usuarioId);
+
+            // Assert
+            result.Success.Should().BeTrue();
+            result.Data.Should().Be(transacaoId);
+            result.Message.Should().Contain("sucesso");
+            
+            _repositoryMock.Verify(r => r.AddAsync(It.Is<Transacao>(t =>
+                t.Tipo == TipoTransacao.Receita &&
+                t.Descricao == dto.Descricao &&
+                t.Valor == dto.Valor &&
+                t.UsuarioId == usuarioId
+            )), Times.Once);
+        }
+        
+        [Fact]
+        public async Task UpdateAsync_QuandoDadosValidosComUsuario_DeveAtualizarTransacaoComUsuario()
+        {
+            // Arrange
+            var id = Guid.NewGuid();
+            var usuarioId = Guid.NewGuid();
+            var updateDto = new UpdateTransacaoDTO
+            {
+                Tipo = (int)TipoTransacao.Despesa,
+                Data = DateTime.Now.AddDays(-1),
+                Descricao = "Teste Atualizado",
+                Valor = 200m
+            };
+            
+            var validationResult = new ValidationResult();  // Validação passa
+            var transacao = new Transacao(TipoTransacao.Receita, DateTime.Now.AddDays(-2), "Teste Original", 100m);
+            
+            // Configurando o Id usando reflection (já que Id é propriedade protegida)
+            typeof(Entity).GetProperty("Id").SetValue(transacao, id);
+            
+            // Configurando o validador de teste
+            _updateTransacaoValidator.SetValidationResult(validationResult);
+            
+            _repositoryMock.Setup(r => r.ExistsAsync(id))
+                          .ReturnsAsync(true);
+                          
+            _repositoryMock.Setup(r => r.GetByIdAsync(id))
+                          .ReturnsAsync(transacao);
+                          
+            _repositoryMock.Setup(r => r.UpdateAsync(It.IsAny<Transacao>()))
+                          .Returns(Task.CompletedTask);
+
+            // Act
+            var result = await _service.UpdateAsync(id, updateDto, usuarioId);
+
+            // Assert
+            result.Success.Should().BeTrue();
+            result.Message.Should().Contain("sucesso");
+            
+            _repositoryMock.Verify(r => r.UpdateAsync(It.Is<Transacao>(t =>
+                t.Id == id &&
+                t.Tipo == TipoTransacao.Despesa &&
+                t.Descricao == "Teste Atualizado" &&
+                t.Valor == 200m &&
+                t.UsuarioId == usuarioId
+            )), Times.Once);
+        }
+        
         [Fact]
         public async Task DeleteAsync_QuandoTransacaoNaoExiste_DeveRetornarFalha()
         {
@@ -338,4 +425,4 @@ namespace ControleFinanceiro.Application.Tests.Services
             _repositoryMock.Verify(r => r.DeleteAsync(id), Times.Once);
         }
     }
-} 
+}
