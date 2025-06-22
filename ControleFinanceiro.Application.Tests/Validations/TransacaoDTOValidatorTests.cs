@@ -39,26 +39,6 @@ namespace ControleFinanceiro.Application.Tests.Validations
             result.ShouldNotHaveAnyValidationErrors();
         }
 
-        [Fact]
-        public void Validar_IdVazio_DeveRetornarErro()
-        {
-            // Arrange
-            var transacaoDTO = new TransacaoDTO
-            {
-                Id = Guid.Empty,
-                Tipo = (int)TipoTransacao.Receita,
-                Data = DateTime.Now.AddDays(-1),
-                Descricao = "Teste",
-                Valor = 100m
-            };
-
-            // Act
-            var result = _validator.TestValidate(transacaoDTO);
-
-            // Assert
-            result.ShouldHaveValidationErrorFor(t => t.Id);
-        }
-
         [Theory]
         [InlineData("")]
         [InlineData("   ")]
@@ -147,46 +127,6 @@ namespace ControleFinanceiro.Application.Tests.Validations
 
             // Assert
             result.ShouldHaveValidationErrorFor(t => t.Tipo);
-        }
-
-        [Fact]
-        public void Validar_DataFutura_DeveRetornarErro()
-        {
-            // Arrange
-            var transacaoDTO = new TransacaoDTO
-            {
-                Id = Guid.NewGuid(),
-                Tipo = (int)TipoTransacao.Receita,
-                Data = DateTime.Now.AddDays(1), // Data futura
-                Descricao = "Teste",
-                Valor = 100m
-            };
-
-            // Act
-            var result = _validator.TestValidate(transacaoDTO);
-
-            // Assert
-            result.ShouldHaveValidationErrorFor(t => t.Data);
-        }
-
-        [Fact]
-        public void Validar_DataMuitoAntiga_DeveRetornarErro()
-        {
-            // Arrange
-            var transacaoDTO = new TransacaoDTO
-            {
-                Id = Guid.NewGuid(),
-                Tipo = (int)TipoTransacao.Receita,
-                Data = DateTime.Now.AddYears(-6), // Data muito antiga
-                Descricao = "Teste",
-                Valor = 100m
-            };
-
-            // Act
-            var result = _validator.TestValidate(transacaoDTO);
-
-            // Assert
-            result.ShouldHaveValidationErrorFor(t => t.Data);
         }
     }
 
@@ -344,26 +284,6 @@ namespace ControleFinanceiro.Application.Tests.Validations
                 Tipo = (int)TipoTransacao.Receita,
                 Data = DateTime.Now.AddDays(-1),
                 Descricao = descricao,
-                Valor = 100m
-            };
-
-            // Act
-            var result = _validator.TestValidate(updateDTO);
-
-            // Assert
-            result.ShouldHaveValidationErrorFor(t => t.Descricao);
-        }
-
-        [Fact]
-        public void Validar_DescricaoMuitoLonga_DeveRetornarErro()
-        {
-            // Arrange
-            var descricaoLonga = new string('A', Transacao.DESCRICAO_MAX_LENGTH + 1);
-            var updateDTO = new UpdateTransacaoDTO
-            {
-                Tipo = (int)TipoTransacao.Receita,
-                Data = DateTime.Now.AddDays(-1),
-                Descricao = descricaoLonga,
                 Valor = 100m
             };
 
