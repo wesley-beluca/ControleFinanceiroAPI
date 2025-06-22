@@ -1,6 +1,8 @@
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
+using ControleFinanceiro.Domain.Constants;
 using ControleFinanceiro.Domain.Entities;
+using ControleFinanceiro.Domain.Interfaces;
 using ControleFinanceiro.Domain.Interfaces.Repositories;
 using System;
 using System.Collections.Generic;
@@ -12,23 +14,34 @@ namespace ControleFinanceiro.Application.Services
     public class ResumoFinanceiroService : IResumoFinanceiroService
     {
         private readonly ITransacaoRepository _transacaoRepository;
+        private readonly INotificationService _notificationService;
 
-        public ResumoFinanceiroService(ITransacaoRepository transacaoRepository)
+        public ResumoFinanceiroService(ITransacaoRepository transacaoRepository, INotificationService notificationService)
         {
             _transacaoRepository = transacaoRepository;
+            _notificationService = notificationService;
         }
 
-        public async Task<Result<ResumoFinanceiroDTO>> GerarResumoFinanceiroAsync(DateTime dataInicio, DateTime dataFim, Guid? usuarioId = null)
+        public async Task<ResumoFinanceiroDTO> GerarResumoFinanceiroAsync(DateTime dataInicio, DateTime dataFim, Guid? usuarioId = null)
         {
+            // Limpa notificações anteriores
+            _notificationService.Clear();
+            
             try
             {
                 // Validação das datas
                 if (dataInicio > dataFim)
-                    return Result<ResumoFinanceiroDTO>.Fail("A data inicial não pode ser maior que a data final");
+                {
+                    _notificationService.AddNotification(ChavesNotificacao.DataInicio, MensagensErro.DataInicioMaiorQueFinal);
+                    return null;
+                }
 
                 // Limitar o período de consulta para evitar sobrecarga
                 if ((dataFim - dataInicio).TotalDays > 366)
-                    return Result<ResumoFinanceiroDTO>.Fail("O período de consulta não pode ser maior que 1 ano");
+                {
+                    _notificationService.AddNotification(ChavesNotificacao.Periodo, MensagensErro.PeriodoInvalido);
+                    return null;
+                }
 
                 // Buscar todas as transações no período (filtradas por usuário se especificado)
                 var transacoesPeriodo = await _transacaoRepository.GetByPeriodoAsync(dataInicio, dataFim, usuarioId);
@@ -42,12 +55,10 @@ namespace ControleFinanceiro.Application.Services
                     dataInicio.AddDays(-1),
                     usuarioId);
                 
-                // Filtrar transações excluídas do período anterior também
                 transacoesAnteriores = transacoesAnteriores.Where(t => !t.Excluido).ToList();
 
                 decimal saldoAnterior = CalcularSaldo(transacoesAnteriores);
                 
-                // Calcular totais do período
                 decimal totalReceitas = transacoesPeriodo
                     .Where(t => t.Tipo == TipoTransacao.Receita)
                     .Sum(t => t.Valor);
@@ -58,25 +69,31 @@ namespace ControleFinanceiro.Application.Services
                     
                 decimal saldoFinal = saldoAnterior + totalReceitas - totalDespesas;
                 
-                // Agrupar transações por dia
-                var transacoesPorDia = transacoesPeriodo
+                var transacoesPorDia = (transacoesPeriodo.Count() > 100 ? transacoesPeriodo.AsParallel() : transacoesPeriodo)
                     .GroupBy(t => t.Data.Date)
                     .OrderBy(g => g.Key)
-                    .Select(g => new TransacaoDiariaDTO
+                    .Select(g => 
                     {
-                        Data = g.Key,
-                        TotalReceitas = g.Where(t => t.Tipo == TipoTransacao.Receita).Sum(t => t.Valor),
-                        TotalDespesas = g.Where(t => t.Tipo == TipoTransacao.Despesa).Sum(t => t.Valor),
-                        SaldoDiario = g.Where(t => t.Tipo == TipoTransacao.Receita).Sum(t => t.Valor) - 
-                                      g.Where(t => t.Tipo == TipoTransacao.Despesa).Sum(t => t.Valor),
-                        Transacoes = g.Select(t => new TransacaoDTO
+                        var receitas = g.Where(t => t.Tipo == TipoTransacao.Receita);
+                        var despesas = g.Where(t => t.Tipo == TipoTransacao.Despesa);
+                        var totalReceitas = receitas.Sum(t => t.Valor);
+                        var totalDespesas = despesas.Sum(t => t.Valor);
+                        
+                        return new TransacaoDiariaDTO
                         {
-                            Id = t.Id,
-                            Tipo = (int)t.Tipo,
-                            Data = t.Data,
-                            Descricao = t.Descricao,
-                            Valor = t.Valor
-                        }).ToList()
+                            Data = g.Key,
+                            TotalReceitas = totalReceitas,
+                            TotalDespesas = totalDespesas,
+                            SaldoDiario = totalReceitas - totalDespesas,
+                            Transacoes = g.Select(t => new TransacaoDTO
+                            {
+                                Id = t.Id,
+                                Tipo = (int)t.Tipo,
+                                Data = t.Data,
+                                Descricao = t.Descricao,
+                                Valor = t.Valor
+                            }).ToList()
+                        };
                     })
                     .ToList();
                     
@@ -91,25 +108,40 @@ namespace ControleFinanceiro.Application.Services
                     TransacoesDiarias = transacoesPorDia
                 };
 
-                return Result<ResumoFinanceiroDTO>.Ok(resumoFinanceiro, "Resumo financeiro gerado com sucesso");
+                return resumoFinanceiro;
             }
             catch (Exception ex)
             {
-                return Result<ResumoFinanceiroDTO>.Fail($"Erro ao gerar resumo financeiro: {ex.Message}");
+                _notificationService.AddNotification(ChavesNotificacao.Erro, $"Erro ao gerar resumo financeiro: {ex.Message}");
+                return null;
             }
         }
         
         private decimal CalcularSaldo(IEnumerable<Transacao> transacoes)
         {
-            decimal receitas = transacoes
-                .Where(t => t.Tipo == TipoTransacao.Receita)
-                .Sum(t => t.Valor);
+            if (transacoes.Count() > 100)
+            {
+                var agrupado = transacoes.AsParallel()
+                    .GroupBy(t => t.Tipo)
+                    .ToDictionary(g => g.Key, g => g.Sum(t => t.Valor));
+                    
+                decimal receitas = agrupado.ContainsKey(TipoTransacao.Receita) ? agrupado[TipoTransacao.Receita] : 0;
+                decimal despesas = agrupado.ContainsKey(TipoTransacao.Despesa) ? agrupado[TipoTransacao.Despesa] : 0;
                 
-            decimal despesas = transacoes
-                .Where(t => t.Tipo == TipoTransacao.Despesa)
-                .Sum(t => t.Valor);
-                
-            return receitas - despesas;
+                return receitas - despesas;
+            }
+            else
+            {
+                decimal receitas = transacoes
+                    .Where(t => t.Tipo == TipoTransacao.Receita)
+                    .Sum(t => t.Valor);
+                    
+                decimal despesas = transacoes
+                    .Where(t => t.Tipo == TipoTransacao.Despesa)
+                    .Sum(t => t.Valor);
+                    
+                return receitas - despesas;
+            }
         }
     }
 } 

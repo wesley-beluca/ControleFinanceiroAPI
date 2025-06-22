@@ -1,3 +1,4 @@
+using ControleFinanceiro.API.Extensions;
 using ControleFinanceiro.Infrastructure.IoC;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -93,6 +94,9 @@ if (!isDocker)
     // Só usa HTTPS redirection quando não estiver no Docker
     app.UseHttpsRedirection();
 }
+
+// Adiciona o middleware global de tratamento de exceções
+app.UseGlobalExceptionHandler();
 
 app.UseCors("AllowVueApp");
 

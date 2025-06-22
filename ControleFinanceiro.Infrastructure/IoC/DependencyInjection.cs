@@ -1,5 +1,7 @@
+using AutoMapper;
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
+using ControleFinanceiro.Application.Mappings;
 using ControleFinanceiro.Application.Services;
 using ControleFinanceiro.Application.Validations;
 using ControleFinanceiro.Domain.Entities;
@@ -47,7 +49,7 @@ namespace ControleFinanceiro.Infrastructure.IoC
             services.AddScoped<IUsuarioRepository, UsuarioRepository>();
             
             // Serviços de Infraestrutura
-            services.AddScoped<INotificationService, NotificationService>();
+            services.AddSingleton<INotificationService, NotificationService>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<ISaldoService, SaldoService>();
@@ -61,6 +63,9 @@ namespace ControleFinanceiro.Infrastructure.IoC
 
         public static IServiceCollection AddApplication(this IServiceCollection services)
         {
+            // Configuração do AutoMapper
+            services.AddAutoMapper(typeof(DomainToDTOMappingProfile), typeof(DTOToDomainMappingProfile));
+            
             // Serviços
             services.AddScoped<ITransacaoService, TransacaoService>();
             services.AddScoped<IResumoFinanceiroService, ResumoFinanceiroService>();
@@ -69,8 +74,7 @@ namespace ControleFinanceiro.Infrastructure.IoC
             services.AddScoped<TransacaoDTOValidator>();
             services.AddScoped<CreateTransacaoDTOValidator>();
             services.AddScoped<UpdateTransacaoDTOValidator>();
-            
-            // Adicionar validadores para DTOs de autenticação se necessário
+
 
             return services;
         }

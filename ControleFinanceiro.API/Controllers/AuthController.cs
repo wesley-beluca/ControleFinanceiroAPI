@@ -1,28 +1,32 @@
+using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.DTOs.Auth;
+using ControleFinanceiro.Application.Interfaces;
+using ControleFinanceiro.Domain.Constants;
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
-using ControleFinanceiro.Domain.Notifications;
-using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System.Linq;
-using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace ControleFinanceiro.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class AuthController : ControllerBase
+    public class AuthController : BaseController
     {
         private readonly IAuthService _authService;
         private readonly IEmailService _emailService;
-        private readonly INotificationService _notificationService;
 
-        public AuthController(IAuthService authService, IEmailService emailService, INotificationService notificationService)
+        public AuthController(
+            IAuthService authService, 
+            IEmailService emailService, 
+            INotificationService notificationService,
+            UserManager<Usuario> userManager = null) : base(notificationService, userManager)
         {
             _authService = authService;
             _emailService = emailService;
-            _notificationService = notificationService;
         }
 
         /// <summary>
@@ -31,23 +35,20 @@ namespace ControleFinanceiro.API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDTO model)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (!ValidarModelState())
+            {
+                return RespostaPersonalizada(null, StatusCodes.Status400BadRequest);
+            }
 
             var (token, usuario) = await _authService.AuthenticateAsync(model.Username, model.Password);
 
             if (token == null)
             {
-                // Verifica se há notificações do serviço
-                if (_notificationService.HasNotifications)
+                if (!_notificationService.HasNotifications)
                 {
-                    return Unauthorized(new { 
-                        message = "Falha na autenticação", 
-                        errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
-                    });
+                    _notificationService.AddNotification(ChavesNotificacao.Autenticacao, MensagensErro.CredenciaisInvalidas);
                 }
-                
-                return Unauthorized(new { message = "Nome de usuário ou senha inválidos" });
+                return RespostaPersonalizada(null, StatusCodes.Status401Unauthorized);
             }
 
             var userDto = new UserDTO
@@ -60,7 +61,7 @@ namespace ControleFinanceiro.API.Controllers
                 DataAlteracao = usuario.DataAlteracao
             };
 
-            return Ok(new { token, user = userDto });
+            return RespostaPersonalizada(new { token, user = userDto });
         }
 
         /// <summary>
@@ -69,26 +70,22 @@ namespace ControleFinanceiro.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDTO model)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            if (!ValidarModelState())
+            {
+                return RespostaPersonalizada(null, StatusCodes.Status400BadRequest);
+            }
 
             if (model.Password != model.ConfirmPassword)
-                return BadRequest(new { message = "As senhas não conferem" });
-
-            var (sucesso, mensagem, usuario) = await _authService.RegisterAsync(model.Username, model.Email, model.Password);
-
-            if (!sucesso)
             {
-                // Verifica se há notificações do serviço
-                if (_notificationService.HasNotifications)
-                {
-                    return BadRequest(new { 
-                        message = "Ocorreram erros durante o registro", 
-                        errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
-                    });
-                }
-                
-                return BadRequest(new { message = mensagem });
+                _notificationService.AddNotification(ChavesNotificacao.Senha, MensagensErro.SenhasNaoConferem);
+                return RespostaPersonalizada(null, StatusCodes.Status400BadRequest);
+            }
+
+            var usuario = await _authService.RegisterAsync(model.Username, model.Email, model.Password);
+
+            if (usuario == null)
+            {
+                return RespostaPersonalizada(null, StatusCodes.Status400BadRequest);
             }
 
             var userDto = new UserDTO
@@ -101,7 +98,7 @@ namespace ControleFinanceiro.API.Controllers
                 DataAlteracao = usuario.DataAlteracao
             };
 
-            return Ok(new { message = mensagem, user = userDto });
+            return RespostaPersonalizada(new { mensagem = "Usuário registrado com sucesso", usuario = userDto });
         }
 
         /// <summary>
@@ -110,23 +107,16 @@ namespace ControleFinanceiro.API.Controllers
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDTO model)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-            var (sucesso, mensagem, usuario, token) = await _authService.SolicitarResetSenhaAsync(model.Email);
-
-            if (!sucesso)
+            if (!ValidarModelState())
             {
-                // Verifica se há notificações do serviço
-                if (_notificationService.HasNotifications)
-                {
-                    return BadRequest(new { 
-                        message = "Ocorreram erros ao processar a solicitação", 
-                        errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
-                    });
-                }
-                
-                return BadRequest(new { message = mensagem });
+                return RespostaPersonalizada(null, StatusCodes.Status400BadRequest);
+            }
+
+            var (usuario, token) = await _authService.SolicitarResetSenhaAsync(model.Email);
+
+            if (_notificationService.HasNotifications)
+            {
+                return RespostaPersonalizada(null, StatusCodes.Status400BadRequest);
             }
 
             if (usuario != null && !string.IsNullOrEmpty(token))
@@ -135,11 +125,12 @@ namespace ControleFinanceiro.API.Controllers
                 
                 if (!emailEnviado)
                 {
-                    return Ok(new { message = "Se o email existir em nossa base de dados, você receberá instruções para redefinição de senha." });
+                    _notificationService.AddNotification(ChavesNotificacao.Email, MensagensErro.ErroEnvioEmail);
+                    return RespostaPersonalizada(new { mensagem = "Se o email existir em nossa base de dados, você receberá instruções para redefinição de senha." });
                 }
             }
 
-            return Ok(new { message = "Instruções para redefinição de senha foram enviadas para seu email" });
+            return RespostaPersonalizada(new { mensagem = "Instruções para redefinição de senha foram enviadas para seu email" });
         }
 
         /// <summary>
@@ -148,31 +139,25 @@ namespace ControleFinanceiro.API.Controllers
         [HttpPost("reset-password")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDTO model)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-            if (model.Password != model.ConfirmPassword)
-                return BadRequest(new { message = "As senhas não conferem" });
-
-            var (sucesso, mensagem) = await _authService.ResetSenhaAsync(model.Token, model.Password);
-
-            if (!sucesso)
+            if (!ValidarModelState())
             {
-                // Verifica se há notificações do serviço
-                if (_notificationService.HasNotifications)
-                {
-                    return BadRequest(new { 
-                        message = "Ocorreram erros ao redefinir a senha", 
-                        errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
-                    });
-                }
-                
-                return BadRequest(new { message = mensagem });
+                return RespostaPersonalizada(null, StatusCodes.Status400BadRequest);
             }
 
-            return Ok(new { message = mensagem });
+            if (model.Password != model.ConfirmPassword)
+            {
+                _notificationService.AddNotification(ChavesNotificacao.Senha, MensagensErro.SenhasNaoConferem);
+                return RespostaPersonalizada(null, StatusCodes.Status400BadRequest);
+            }
+
+            var sucesso = await _authService.ResetSenhaAsync(model.Token, model.Password);
+
+            if (!sucesso || _notificationService.HasNotifications)
+            {
+                return RespostaPersonalizada(null, StatusCodes.Status400BadRequest);
+            }
+        
+            return RespostaPersonalizada(new { mensagem = "Senha redefinida com sucesso" });
         }
-
-
     }
 }

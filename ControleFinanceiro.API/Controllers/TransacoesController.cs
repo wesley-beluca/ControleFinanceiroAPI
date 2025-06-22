@@ -1,14 +1,13 @@
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
+using ControleFinanceiro.Domain.Constants;
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
-using ControleFinanceiro.Domain.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -17,161 +16,92 @@ namespace ControleFinanceiro.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    public class TransacoesController : ControllerBase
+    public class TransacoesController : BaseController
     {
         private readonly ITransacaoService _transacaoService;
-        private readonly UserManager<Usuario> _userManager;
-        private readonly INotificationService _notificationService;
 
-        public TransacoesController(ITransacaoService transacaoService, UserManager<Usuario> userManager, INotificationService notificationService)
+        public TransacoesController(
+            ITransacaoService transacaoService, 
+            UserManager<Usuario> userManager, 
+            INotificationService notificationService) : base(notificationService, userManager)
         {
             _transacaoService = transacaoService;
-            _userManager = userManager;
-            _notificationService = notificationService;
         }
 
         [HttpGet]
-        public async Task<ActionResult<Result<IEnumerable<TransacaoDTO>>>> GetAll()
+        public async Task<ActionResult> GetAll()
         {
-            // Obtém o ID do usuário logado
             Guid? usuarioId = await ObterUsuarioIdLogadoAsync();
             
-            var result = await _transacaoService.GetAllAsync(usuarioId);
-            return Ok(result);
+            var transacoes = await _transacaoService.GetAllAsync(usuarioId);
+            return RespostaPersonalizada(transacoes);
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Result<TransacaoDTO>>> GetById(Guid id)
+        public async Task<ActionResult> GetById(Guid id)
         {
-            // Obtém o ID do usuário logado
             Guid? usuarioId = await ObterUsuarioIdLogadoAsync();
             
-            var result = await _transacaoService.GetByIdAsync(id, usuarioId);
-            return Ok(result);
+            var transacao = await _transacaoService.GetByIdAsync(id, usuarioId);
+            return RespostaPersonalizada(transacao);
         }
 
         [HttpGet("periodo")]
-        public async Task<ActionResult<Result<IEnumerable<TransacaoDTO>>>> GetByPeriodo(
+        public async Task<ActionResult> GetByPeriodo(
             [FromQuery] DateTime dataInicio, 
             [FromQuery] DateTime dataFim)
         {
-            // Obtém o ID do usuário logado
             Guid? usuarioId = await ObterUsuarioIdLogadoAsync();
             
-            var result = await _transacaoService.GetByPeriodoAsync(dataInicio, dataFim, usuarioId);
-            return Ok(result);
+            var transacoes = await _transacaoService.GetByPeriodoAsync(dataInicio, dataFim, usuarioId);
+            return RespostaPersonalizada(transacoes);
         }
 
         [HttpGet("tipo/{tipo}")]
-        public async Task<ActionResult<Result<IEnumerable<TransacaoDTO>>>> GetByTipo(int tipo)
+        public async Task<ActionResult> GetByTipo(int tipo)
         {
-            // Obtém o ID do usuário logado
             Guid? usuarioId = await ObterUsuarioIdLogadoAsync();
             
-            var result = await _transacaoService.GetByTipoAsync(tipo, usuarioId);
-            return Ok(result);
+            var transacoes = await _transacaoService.GetByTipoAsync(tipo, usuarioId);
+            return RespostaPersonalizada(transacoes);
         }
 
         [HttpPost]
-        public async Task<ActionResult<Result<Guid>>> Create([FromBody] CreateTransacaoDTO transacaoDto)
+        public async Task<ActionResult> Create([FromBody] CreateTransacaoDTO transacaoDto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-            // Obtém o ID do usuário logado
-            Guid? usuarioId = ObterUsuarioIdLogado();
-
-            var result = await _transacaoService.AddAsync(transacaoDto, usuarioId);
-            
-            if (!result.Success && _notificationService.HasNotifications)
+            if (!ValidarModelState())
             {
-                return BadRequest(new { 
-                    message = "Ocorreram erros ao criar a transação", 
-                    errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
-                });
+                return RespostaPersonalizada();
             }
+
+            Guid? usuarioId = await ObterUsuarioIdLogadoAsync();
+            var novaTransacaoId = await _transacaoService.AddAsync(transacaoDto, usuarioId);
             
-            return result.Success 
-                ? CreatedAtAction(nameof(GetById), new { id = result.Data }, result)
-                : BadRequest(result);
+            if (_notificationService.HasNotifications)
+                return RespostaPersonalizada();
+                
+            return RespostaPersonalizadaCreated(nameof(GetById), new { id = novaTransacaoId }, novaTransacaoId);
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<Result<bool>>> Update(Guid id, [FromBody] UpdateTransacaoDTO transacaoDto)
+        public async Task<ActionResult> Update(Guid id, [FromBody] UpdateTransacaoDTO transacaoDto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-            // Obtém o ID do usuário logado
-            Guid? usuarioId = ObterUsuarioIdLogado();
-
-            var result = await _transacaoService.UpdateAsync(id, transacaoDto, usuarioId);
-            
-            if (!result.Success && _notificationService.HasNotifications)
+            if (!ValidarModelState())
             {
-                return BadRequest(new { 
-                    message = "Ocorreram erros ao atualizar a transação", 
-                    errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
-                });
+                return RespostaPersonalizada();
             }
-            
-            return Ok(result);
+
+            Guid? usuarioId = await ObterUsuarioIdLogadoAsync();
+            var sucesso = await _transacaoService.UpdateAsync(id, transacaoDto, usuarioId);
+            return RespostaPersonalizada(sucesso);
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult<Result<bool>>> Delete(Guid id)
+        public async Task<ActionResult> Delete(Guid id)
         {
-            var result = await _transacaoService.DeleteAsync(id);
-            
-            if (!result.Success && _notificationService.HasNotifications)
-            {
-                return BadRequest(new { 
-                    message = "Ocorreram erros ao excluir a transação", 
-                    errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
-                });
-            }
-            
-            return Ok(result);
-        }
-
-        /// <summary>
-        /// Obtém o ID do usuário logado a partir do token JWT
-        /// </summary>
-        /// <returns>ID do usuário ou null se não estiver autenticado</returns>
-        private Guid? ObterUsuarioIdLogado()
-        {
-            // Verifica se o usuário está autenticado
-            if (!User.Identity.IsAuthenticated)
-                return null;
-
-            // Obtém o claim com o ID do usuário
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || string.IsNullOrEmpty(userIdClaim.Value))
-                return null;
-
-            // Converte o ID para Guid
-            if (Guid.TryParse(userIdClaim.Value, out Guid userId))
-                return userId;
-
-            return null;
-        }
-        
-        /// <summary>
-        /// Obtém o ID do usuário logado usando o UserManager
-        /// </summary>
-        /// <returns>ID do usuário ou null se não estiver autenticado</returns>
-        private async Task<Guid?> ObterUsuarioIdLogadoAsync()
-        {
-            // Verifica se o usuário está autenticado
-            if (!User.Identity.IsAuthenticated)
-                return null;
-                
-            // Obtém o usuário atual usando o UserManager
-            var usuario = await _userManager.GetUserAsync(User);
-            if (usuario == null)
-                return null;
-                
-            return usuario.Id;
+            Guid? usuarioId = await ObterUsuarioIdLogadoAsync();
+            var sucesso = await _transacaoService.DeleteAsync(id, usuarioId);
+            return RespostaPersonalizada(sucesso);
         }
     }
 }

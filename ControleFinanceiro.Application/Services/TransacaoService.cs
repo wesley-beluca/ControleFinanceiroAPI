@@ -1,6 +1,8 @@
+using AutoMapper;
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
 using ControleFinanceiro.Application.Validations;
+using ControleFinanceiro.Domain.Constants;
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
 using ControleFinanceiro.Domain.Interfaces.Repositories;
@@ -20,44 +22,58 @@ namespace ControleFinanceiro.Application.Services
         private readonly CreateTransacaoDTOValidator _createTransacaoValidator;
         private readonly UpdateTransacaoDTOValidator _updateTransacaoValidator;
         private readonly INotificationService _notificationService;
+        private readonly IMapper _mapper;
 
         public TransacaoService(
             ITransacaoRepository transacaoRepository,
             TransacaoDTOValidator transacaoValidator,
             CreateTransacaoDTOValidator createTransacaoValidator,
             UpdateTransacaoDTOValidator updateTransacaoValidator,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            IMapper mapper)
         {
             _transacaoRepository = transacaoRepository;
             _transacaoValidator = transacaoValidator;
             _createTransacaoValidator = createTransacaoValidator;
             _updateTransacaoValidator = updateTransacaoValidator;
             _notificationService = notificationService;
+            _mapper = mapper;
         }
 
-        public async Task<Result<TransacaoDTO>> GetByIdAsync(Guid id, Guid? usuarioId = null)
+        public async Task<TransacaoDTO> GetByIdAsync(Guid id, Guid? usuarioId = null)
         {
+            // Limpa notificações anteriores
+            _notificationService.Clear();
+            
             Transacao transacao;
             
             if (usuarioId.HasValue)
             {
                 transacao = await _transacaoRepository.GetByIdAndUsuarioAsync(id, usuarioId.Value);
                 if (transacao == null)
-                    return Result<TransacaoDTO>.Fail("Transação não encontrada ou não pertence ao usuário");
+                {
+                    _notificationService.AddNotification("Id", "Transação não encontrada ou não pertence ao usuário");
+                    return null;
+                }
             }
             else
             {
                 transacao = await _transacaoRepository.GetByIdAsync(id);
                 if (transacao == null)
-                    return Result<TransacaoDTO>.Fail("Transação não encontrada");
+                {
+                    _notificationService.AddNotification("Id", "Transação não encontrada");
+                    return null;
+                }
             }
 
-            TransacaoDTO transacaoDto = MapToDto(transacao);
-            return Result<TransacaoDTO>.Ok(transacaoDto);
+            return MapToDto(transacao);
         }
 
-        public async Task<Result<IEnumerable<TransacaoDTO>>> GetAllAsync(Guid? usuarioId = null)
+        public async Task<IEnumerable<TransacaoDTO>> GetAllAsync(Guid? usuarioId = null)
         {
+            // Limpa notificações anteriores
+            _notificationService.Clear();
+            
             IEnumerable<Transacao> transacoes;
             
             if (usuarioId.HasValue)
@@ -69,104 +85,103 @@ namespace ControleFinanceiro.Application.Services
                 transacoes = await _transacaoRepository.GetAllAsync();
             }
             
-            IEnumerable<TransacaoDTO> transacoesDto = transacoes.Select(t => MapToDto(t));
-
-            return Result<IEnumerable<TransacaoDTO>>.Ok(transacoesDto);
-        }
-
-        public async Task<Result<IEnumerable<TransacaoDTO>>> GetByPeriodoAsync(DateTime dataInicio, DateTime dataFim, Guid? usuarioId = null)
-        {
-            // Validação das datas
-            if (dataInicio > dataFim)
-                return Result<IEnumerable<TransacaoDTO>>.Fail("A data inicial não pode ser maior que a data final");
-
-            // Limitar o período de consulta para evitar sobrecarga
-            if ((dataFim - dataInicio).TotalDays > 366)
-                return Result<IEnumerable<TransacaoDTO>>.Fail("O período de consulta não pode ser maior que 1 ano");
-
-            IEnumerable<Transacao> transacoes = await _transacaoRepository.GetByPeriodoAsync(dataInicio, dataFim, usuarioId);
+            // Otimização: usar AsParallel para mapear grandes conjuntos de dados
+            if (transacoes.Count() > 100)
+            {
+                return _mapper.Map<IEnumerable<TransacaoDTO>>(transacoes.AsParallel().ToList());
+            }
             
-            IEnumerable<TransacaoDTO> transacoesDto = transacoes.Select(t => MapToDto(t));
-
-            return Result<IEnumerable<TransacaoDTO>>.Ok(transacoesDto);
+            return _mapper.Map<IEnumerable<TransacaoDTO>>(transacoes);
         }
 
-        public async Task<Result<IEnumerable<TransacaoDTO>>> GetByTipoAsync(int tipo, Guid? usuarioId = null)
-        {
-            if (!Enum.IsDefined(typeof(TipoTransacao), tipo))
-                return Result<IEnumerable<TransacaoDTO>>.Fail("Tipo de transação inválido. Use 0 para Despesa ou 1 para Receita");
-
-            IEnumerable<Transacao> transacoes = await _transacaoRepository.GetByTipoAsync((TipoTransacao)tipo, usuarioId);
-            
-            IEnumerable<TransacaoDTO> transacoesDto = transacoes.Select(t => MapToDto(t));
-
-            return Result<IEnumerable<TransacaoDTO>>.Ok(transacoesDto);
-        }
-
-        public async Task<Result<Guid>> AddAsync(CreateTransacaoDTO transacaoDto, Guid? usuarioId = null)
+        public async Task<IEnumerable<TransacaoDTO>> GetByPeriodoAsync(DateTime dataInicio, DateTime dataFim, Guid? usuarioId = null)
         {
             // Limpa notificações anteriores
             _notificationService.Clear();
             
-            // Validação do DTO
-            var validationResult = await _createTransacaoValidator.ValidateAsync(transacaoDto);
-            if (!validationResult.IsValid)
+            // Validação das datas
+            if (dataInicio > dataFim)
             {
-                foreach (var error in validationResult.Errors)
-                {
-                    _notificationService.AddNotification(error.PropertyName, error.ErrorMessage);
-                }
-                return Result<Guid>.Fail("Erros de validação encontrados");
+                _notificationService.AddNotification(ChavesNotificacao.DataInicio, MensagensErro.DataInicioMaiorQueFinal);
+                return new List<TransacaoDTO>();
             }
 
-            // Validação do tipo de transação
-            if (!Enum.IsDefined(typeof(TipoTransacao), transacaoDto.Tipo))
+            // Limitar o período de consulta para evitar sobrecarga
+            if ((dataFim - dataInicio).TotalDays > 366)
             {
-                _notificationService.AddNotification("Tipo", "Tipo de transação inválido. Use 0 para Despesa ou 1 para Receita");
-                return Result<Guid>.Fail("Tipo de transação inválido");
+                _notificationService.AddNotification("Periodo", "O período de consulta não pode ser maior que 1 ano");
+                return new List<TransacaoDTO>();
             }
 
+            IEnumerable<Transacao> transacoes = await _transacaoRepository.GetByPeriodoAsync(dataInicio, dataFim, usuarioId);
+            
+            // Otimização: usar AsParallel para mapear grandes conjuntos de dados
+            if (transacoes.Count() > 100)
+            {
+                return transacoes.AsParallel().Select(t => MapToDto(t)).ToList();
+            }
+            
+            return transacoes.Select(t => MapToDto(t)).ToList();
+        }
+
+        public async Task<IEnumerable<TransacaoDTO>> GetByTipoAsync(int tipo, Guid? usuarioId = null)
+        {
+            // Limpa notificações anteriores
+            _notificationService.Clear();
+            
+            // Validação do tipo
+            if (!Enum.IsDefined(typeof(TipoTransacao), tipo))
+            {
+                _notificationService.AddNotification(ChavesNotificacao.Tipo, MensagensErro.TipoTransacaoInvalido);
+                return new List<TransacaoDTO>();
+            }
+
+            IEnumerable<Transacao> transacoes;
+            
+            transacoes = await _transacaoRepository.GetByTipoAsync((TipoTransacao)tipo, usuarioId);
+            
+            return _mapper.Map<IEnumerable<TransacaoDTO>>(transacoes);
+        }
+
+        public async Task<Guid> AddAsync(CreateTransacaoDTO transacaoDto, Guid? usuarioId = null)
+        {
+            // Limpa notificações anteriores
+            _notificationService.Clear();
+            
             try
             {
-                // Criação da entidade com Notification Pattern
-                var notification = new Notification();
+                // Validação do DTO
+                var validationResult = await _createTransacaoValidator.ValidateAsync(transacaoDto);
+                if (!validationResult.IsValid)
+                {
+                    foreach (var error in validationResult.Errors)
+                    {
+                        _notificationService.AddNotification(error.PropertyName, error.ErrorMessage);
+                    }
+                    return Guid.Empty;
+                }
+
+                // Criação da entidade
                 var transacao = new Transacao(
                     (TipoTransacao)transacaoDto.Tipo,
                     transacaoDto.Data,
                     transacaoDto.Descricao,
                     transacaoDto.Valor,
-                    usuarioId,
-                    notification
+                    usuarioId
                 );
-                
-                // Verifica se há erros de validação na entidade
-                if (!notification.IsValid)
-                {
-                    // Transfere as notificações da entidade para o serviço de notificação
-                    foreach (var item in notification.Notifications)
-                    {
-                        _notificationService.AddNotification(item.Key, item.Message);
-                    }
-                    return Result<Guid>.Fail("Erros de validação na entidade");
-                }
 
                 // Persistência
                 await _transacaoRepository.AddAsync(transacao);
-                return Result<Guid>.Ok(transacao.Id, "Transação criada com sucesso");
-            }
-            catch (ArgumentException ex)
-            {
-                _notificationService.AddNotification("Erro", ex.Message);
-                return Result<Guid>.Fail(ex.Message);
+                return transacao.Id;
             }
             catch (Exception ex)
             {
-                _notificationService.AddNotification("Erro", $"Erro ao criar transação: {ex.Message}");
-                return Result<Guid>.Fail($"Erro ao criar transação: {ex.Message}");
+                _notificationService.AddNotification(ChavesNotificacao.Erro, $"Erro ao criar transação: {ex.Message}");
+                return Guid.Empty;
             }
         }
 
-        public async Task<Result<bool>> UpdateAsync(Guid id, UpdateTransacaoDTO transacaoDto, Guid? usuarioId = null)
+        public async Task<bool> UpdateAsync(Guid id, UpdateTransacaoDTO transacaoDto, Guid? usuarioId = null)
         {
             // Limpa notificações anteriores
             _notificationService.Clear();
@@ -179,51 +194,56 @@ namespace ControleFinanceiro.Application.Services
                 {
                     _notificationService.AddNotification(error.PropertyName, error.ErrorMessage);
                 }
-                return Result<bool>.Fail("Erros de validação encontrados");
+                return false;
             }
 
             // Validação do tipo de transação
             if (!Enum.IsDefined(typeof(TipoTransacao), transacaoDto.Tipo))
             {
-                _notificationService.AddNotification("Tipo", "Tipo de transação inválido. Use 0 para Despesa ou 1 para Receita");
-                return Result<bool>.Fail("Tipo de transação inválido");
+                _notificationService.AddNotification(ChavesNotificacao.Tipo, MensagensErro.TipoTransacaoInvalido);
+                return false;
             }
 
             try
             {
-                // Verifica se a transação existe
-                bool exists = await _transacaoRepository.ExistsAsync(id);
-                if (!exists)
+                // Verifica se a transação existe e pertence ao usuário
+                Transacao transacao;
+                
+                if (usuarioId.HasValue)
                 {
-                    _notificationService.AddNotification("Id", $"Transação com ID {id} não encontrada");
-                    return Result<bool>.Fail($"Transação com ID {id} não encontrada");
+                    transacao = await _transacaoRepository.GetByIdAndUsuarioAsync(id, usuarioId.Value);
+                    if (transacao == null)
+                    {
+                        _notificationService.AddNotification(ChavesNotificacao.Transacao, MensagensErro.TransacaoNaoPertenceUsuario);
+                        return false;
+                    }
                 }
-
-                // Busca a entidade
-                Transacao transacao = await _transacaoRepository.GetByIdAsync(id);
-                if (transacao == null)
+                else
                 {
-                    _notificationService.AddNotification("Id", $"Transação com ID {id} não encontrada");
-                    return Result<bool>.Fail($"Transação com ID {id} não encontrada");
+                    transacao = await _transacaoRepository.GetByIdAsync(id);
+                    if (transacao == null)
+                    {
+                        _notificationService.AddNotification(ChavesNotificacao.Transacao, MensagensErro.TransacaoNaoEncontrada);
+                        return false;
+                    }
                 }
 
                 // Atualiza os dados da transação usando Notification Pattern
-                Result<bool> resultadoAtualizacao = AtualizarDadosTransacao(transacao, transacaoDto, usuarioId);
-                if (!resultadoAtualizacao.Success)
-                    return resultadoAtualizacao;
+                if (!AtualizarDadosTransacao(transacao, transacaoDto, usuarioId))
+                    return false;
 
                 // Persistência
                 await _transacaoRepository.UpdateAsync(transacao);
-                return Result<bool>.Ok(true, "Transação atualizada com sucesso");
+                return true;
             }
             catch (Exception ex)
             {
-                _notificationService.AddNotification("Erro", $"Erro ao atualizar transação: {ex.Message}");
-                return Result<bool>.Fail($"Erro ao atualizar transação: {ex.Message}");
+                _notificationService.AddNotification(ChavesNotificacao.Erro, $"Erro ao atualizar transação: {ex.Message}");
+                return false;
             }
         }
 
-        private Result<bool> AtualizarDadosTransacao(Transacao transacao, UpdateTransacaoDTO transacaoDto, Guid? usuarioId = null)
+        private bool AtualizarDadosTransacao(Transacao transacao, UpdateTransacaoDTO transacaoDto, Guid? usuarioId = null)
         {
             // Usa o Notification Pattern para coletar erros
             var notification = new Notification();
@@ -244,54 +264,54 @@ namespace ControleFinanceiro.Application.Services
                     _notificationService.AddNotification(item.Key, item.Message);
                 }
                 
-                // Retorna falha com a lista de erros
-                var errorMessages = notification.Notifications.Select(e => e.Message).ToList();
-                return Result<bool>.Fail(errorMessages);
+                return false;
             }
 
-            return Result<bool>.Ok(true);
+            return true;
         }
 
-        public async Task<Result<bool>> DeleteAsync(Guid id)
+        public async Task<bool> DeleteAsync(Guid id, Guid? usuarioId = null)
         {
             // Limpa notificações anteriores
             _notificationService.Clear();
             
             try
             {
-                // Verifica se a transação existe
-                bool exists = await _transacaoRepository.ExistsAsync(id);
-                if (!exists)
+                // Verifica se a transação existe e pertence ao usuário
+                if (usuarioId.HasValue)
                 {
-                    _notificationService.AddNotification("Id", $"Transação com ID {id} não encontrada");
-                    return Result<bool>.Fail($"Transação com ID {id} não encontrada");
+                    var transacao = await _transacaoRepository.GetByIdAndUsuarioAsync(id, usuarioId.Value);
+                    if (transacao == null)
+                    {
+                        _notificationService.AddNotification(ChavesNotificacao.Transacao, MensagensErro.TransacaoNaoPertenceUsuario);
+                        return false;
+                    }
+                }
+                else
+                {
+                    bool exists = await _transacaoRepository.ExistsAsync(id);
+                    if (!exists)
+                    {
+                        _notificationService.AddNotification(ChavesNotificacao.Transacao, MensagensErro.TransacaoNaoEncontrada);
+                        return false;
+                    }
                 }
 
                 // Persistência (utilizando soft delete)
                 await _transacaoRepository.DeleteAsync(id);
-                return Result<bool>.Ok(true, "Transação excluída com sucesso");
+                return true;
             }
             catch (Exception ex)
             {
-                _notificationService.AddNotification("Erro", $"Erro ao excluir transação: {ex.Message}");
-                return Result<bool>.Fail($"Erro ao excluir transação: {ex.Message}");
+                _notificationService.AddNotification(ChavesNotificacao.Erro, $"Erro ao excluir transação: {ex.Message}");
+                return false;
             }
         }
 
-        // Método auxiliar para mapear entidade para DTO
+        // Método auxiliar para mapear entidade para DTO usando AutoMapper
         private TransacaoDTO MapToDto(Transacao transacao)
         {
-            return new TransacaoDTO
-            {
-                Id = transacao.Id,
-                Tipo = (int)transacao.Tipo,
-                Data = transacao.Data,
-                Descricao = transacao.Descricao,
-                Valor = transacao.Valor,
-                DataInclusao = transacao.DataInclusao,
-                DataAlteracao = transacao.DataAlteracao,
-                UsuarioId = transacao.UsuarioId
-            };
+            return _mapper.Map<TransacaoDTO>(transacao);
         }
     }
 } 

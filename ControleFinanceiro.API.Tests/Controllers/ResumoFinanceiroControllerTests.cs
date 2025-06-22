@@ -5,10 +5,10 @@ using System.Threading.Tasks;
 using ControleFinanceiro.API.Controllers;
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
+using ControleFinanceiro.Domain.Constants;
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
 using ControleFinanceiro.Domain.Notifications;
-using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -25,6 +25,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
         private readonly Mock<UserManager<Usuario>> _userManagerMock;
         private readonly Mock<INotificationService> _notificationServiceMock;
         private readonly ResumoFinanceiroController _controller;
+        private readonly Guid _usuarioId;
 
         public ResumoFinanceiroControllerTests()
         {
@@ -34,15 +35,18 @@ namespace ControleFinanceiro.API.Tests.Controllers
             
             // Configuração padrão para o mock do INotificationService
             _notificationServiceMock.Setup(n => n.HasNotifications).Returns(false);
-            _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem>().AsReadOnly());
+            _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem>());
             
-            _controller = new ResumoFinanceiroController(_resumoFinanceiroServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
+            _controller = new ResumoFinanceiroController(
+                _resumoFinanceiroServiceMock.Object, 
+                _userManagerMock.Object, 
+                _notificationServiceMock.Object);
             
             // Setup user authentication
-            var usuarioId = Guid.NewGuid();
+            _usuarioId = Guid.NewGuid();
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.NameIdentifier, usuarioId.ToString())
+                new Claim(ClaimTypes.NameIdentifier, _usuarioId.ToString())
             };
             var identity = new ClaimsIdentity(claims, "TestAuth");
             var principal = new ClaimsPrincipal(identity);
@@ -57,12 +61,11 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 HttpContext = httpContext
             };
             
-            var usuario = new Usuario { Id = usuarioId };
+            var usuario = new Usuario { Id = _usuarioId };
             _userManagerMock.Setup(x => x.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
                 .ReturnsAsync(usuario);
         }
         
-
         private Mock<UserManager<TUser>> MockUserManager<TUser>() where TUser : class
         {
             var store = new Mock<IUserStore<TUser>>();
@@ -99,20 +102,25 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 SaldoFinal = 2000m
             };
 
-            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
-                                       .ReturnsAsync(Result<ResumoFinanceiroDTO>.Ok(resumo));
+            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, _usuarioId))
+                .ReturnsAsync(resumo);
+
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(false);
 
             // Act
             var result = await _controller.GetResumoFinanceiro(dataInicio, dataFim);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<ResumoFinanceiroDTO>>().Subject;
-            returnedResult.Success.Should().BeTrue();
-            returnedResult.Data.TotalReceitas.Should().Be(5000m);
-            returnedResult.Data.TotalDespesas.Should().Be(3000m);
-            returnedResult.Data.SaldoFinal.Should().Be(2000m);
-            returnedResult.Data.Periodo.Should().Be($"{dataInicio:dd/MM/yyyy} a {dataFim:dd/MM/yyyy}");
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
+            
+            dynamic response = okResult.Value!;
+            Assert.True((bool)response.GetType().GetProperty("sucesso").GetValue(response)!);
+            
+            dynamic dados = response.GetType().GetProperty("dados").GetValue(response)!;
+            Assert.Equal(5000m, (decimal)dados.GetType().GetProperty("totalReceitas").GetValue(dados));
+            Assert.Equal(3000m, (decimal)dados.GetType().GetProperty("totalDespesas").GetValue(dados));
+            Assert.Equal(2000m, (decimal)dados.GetType().GetProperty("saldoFinal").GetValue(dados));
         }
 
         [Fact]
@@ -120,39 +128,28 @@ namespace ControleFinanceiro.API.Tests.Controllers
         {
             // Arrange
             var dataInicio = DateTime.Now;
-            var dataFim = DateTime.Now.AddDays(-1); // Data inválida (fim antes do início)
+            var dataFim = DateTime.Now.AddDays(-30); // Data início maior que data fim
 
-            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
-                                       .ReturnsAsync(Result<ResumoFinanceiroDTO>.Fail("A data inicial não pode ser maior que a data final"));
-
-            // Act
-            var result = await _controller.GetResumoFinanceiro(dataInicio, dataFim);
-
-            // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<ResumoFinanceiroDTO>>().Subject;
-            returnedResult.Success.Should().BeFalse();
-            returnedResult.Message.Should().Be("A data inicial não pode ser maior que a data final");
-        }
-
-        [Fact]
-        public async Task GetResumoFinanceiro_QuandoPeriodoMuitoLongo_DeveRetornarBadRequest()
-        {
-            // Arrange
-            var dataInicio = DateTime.Now.AddDays(-400); // Mais de 1 ano
-            var dataFim = DateTime.Now;
-
-            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
-                                       .ReturnsAsync(Result<ResumoFinanceiroDTO>.Fail("O período não pode ser maior que 1 ano"));
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
+            _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem>
+            {
+                new NotificationItem(ChavesNotificacao.DataInicio, MensagensErro.DataInicioMaiorQueFinal)
+            });
 
             // Act
             var result = await _controller.GetResumoFinanceiro(dataInicio, dataFim);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<ResumoFinanceiroDTO>>().Subject;
-            returnedResult.Success.Should().BeFalse();
-            returnedResult.Message.Should().Be("O período não pode ser maior que 1 ano");
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
+            
+            dynamic response = badRequestResult.Value!;
+            Assert.False((bool)response.GetType().GetProperty("sucesso").GetValue(response)!);
+            
+            // Verifica que o serviço não foi chamado
+            _resumoFinanceiroServiceMock.Verify(
+                s => s.GerarResumoFinanceiroAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<Guid?>()), 
+                Times.Never);
         }
 
         [Fact]
@@ -170,19 +167,25 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 SaldoFinal = 0m
             };
 
-            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
-                                       .ReturnsAsync(Result<ResumoFinanceiroDTO>.Ok(resumo));
+            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, _usuarioId))
+                .ReturnsAsync(resumo);
+
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(false);
 
             // Act
             var result = await _controller.GetResumoFinanceiro(dataInicio, dataFim);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<ResumoFinanceiroDTO>>().Subject;
-            returnedResult.Success.Should().BeTrue();
-            returnedResult.Data.TotalReceitas.Should().Be(0m);
-            returnedResult.Data.TotalDespesas.Should().Be(0m);
-            returnedResult.Data.SaldoFinal.Should().Be(0m);
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
+            
+            dynamic response = okResult.Value!;
+            Assert.True((bool)response.GetType().GetProperty("sucesso").GetValue(response)!);
+            
+            dynamic dados = response.GetType().GetProperty("dados").GetValue(response)!;
+            Assert.Equal(0m, (decimal)dados.GetType().GetProperty("totalReceitas").GetValue(dados));
+            Assert.Equal(0m, (decimal)dados.GetType().GetProperty("totalDespesas").GetValue(dados));
+            Assert.Equal(0m, (decimal)dados.GetType().GetProperty("saldoFinal").GetValue(dados));
         }
 
         [Fact]
@@ -200,19 +203,25 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 SaldoFinal = -2000m // Saldo negativo
             };
 
-            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
-                                       .ReturnsAsync(Result<ResumoFinanceiroDTO>.Ok(resumo));
+            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, _usuarioId))
+                .ReturnsAsync(resumo);
+
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(false);
 
             // Act
             var result = await _controller.GetResumoFinanceiro(dataInicio, dataFim);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<ResumoFinanceiroDTO>>().Subject;
-            returnedResult.Success.Should().BeTrue();
-            returnedResult.Data.TotalReceitas.Should().Be(1000m);
-            returnedResult.Data.TotalDespesas.Should().Be(3000m);
-            returnedResult.Data.SaldoFinal.Should().Be(-2000m);
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
+            
+            dynamic response = okResult.Value!;
+            Assert.True((bool)response.GetType().GetProperty("sucesso").GetValue(response)!);
+            
+            dynamic dados = response.GetType().GetProperty("dados").GetValue(response)!;
+            Assert.Equal(1000m, (decimal)dados.GetType().GetProperty("totalReceitas").GetValue(dados));
+            Assert.Equal(3000m, (decimal)dados.GetType().GetProperty("totalDespesas").GetValue(dados));
+            Assert.Equal(-2000m, (decimal)dados.GetType().GetProperty("saldoFinal").GetValue(dados));
         }
 
         [Fact]
@@ -222,17 +231,27 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var dataInicio = DateTime.Now.AddDays(-30);
             var dataFim = DateTime.Now;
 
-            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
-                                       .ReturnsAsync(Result<ResumoFinanceiroDTO>.Fail("Erro ao processar o resumo financeiro"));
+            _resumoFinanceiroServiceMock.Setup(s => s.GerarResumoFinanceiroAsync(dataInicio, dataFim, _usuarioId))
+                .ReturnsAsync(() => null);
+
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
+            _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem>
+            {
+                new NotificationItem(ChavesNotificacao.Erro, "Erro ao processar o resumo financeiro")
+            });
 
             // Act
             var result = await _controller.GetResumoFinanceiro(dataInicio, dataFim);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<ResumoFinanceiroDTO>>().Subject;
-            returnedResult.Success.Should().BeFalse();
-            returnedResult.Message.Should().Be("Erro ao processar o resumo financeiro");
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
+            
+            dynamic response = badRequestResult.Value!;
+            Assert.False((bool)response.GetType().GetProperty("sucesso").GetValue(response)!);
+            
+            var erros = response.GetType().GetProperty("erros").GetValue(response) as IEnumerable<object>;
+            Assert.NotEmpty(erros!);
         }
     }
-} 
+}

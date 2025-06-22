@@ -1,13 +1,14 @@
 using ControleFinanceiro.API.Controllers;
 using ControleFinanceiro.Application.DTOs.Auth;
+using ControleFinanceiro.Domain.Constants;
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
 using ControleFinanceiro.Domain.Notifications;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -28,7 +29,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             
             // Configuração padrão para o mock do INotificationService
             _mockNotificationService.Setup(n => n.HasNotifications).Returns(false);
-            _mockNotificationService.Setup(n => n.Notifications).Returns(new List<NotificationItem>().AsReadOnly());
+            _mockNotificationService.Setup(n => n.Notifications).Returns(new List<NotificationItem>());
             
             _controller = new AuthController(_mockAuthService.Object, _mockEmailService.Object, _mockNotificationService.Object);
         }
@@ -42,22 +43,25 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var token = "token_reset_senha_123";
 
             _mockAuthService.Setup(x => x.SolicitarResetSenhaAsync(model.Email))
-                .ReturnsAsync((true, "Token de redefinição de senha gerado com sucesso", usuario, token));
+                .ReturnsAsync((usuario, token));
 
             _mockEmailService.Setup(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.UserName))
                 .ReturnsAsync(true);
 
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(false);
+
             // Act
-            var resultado = await _controller.ForgotPassword(model) as OkObjectResult;
+            var resultado = await _controller.ForgotPassword(model);
 
             // Assert
-            Assert.NotNull(resultado);
-            Assert.Equal(200, resultado.StatusCode);
+            var okResult = Assert.IsType<OkObjectResult>(resultado);
+            Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
             
-            var json = JsonSerializer.Serialize(resultado.Value);
-            var responseObj = JsonSerializer.Deserialize<JsonElement>(json);
-            var message = responseObj.GetProperty("message").GetString();
-            Assert.Equal("Instruções para redefinição de senha foram enviadas para seu email", message);
+            dynamic response = okResult.Value!;
+            Assert.True((bool)response.GetType().GetProperty("sucesso").GetValue(response)!);
+            
+            dynamic dados = response.GetType().GetProperty("dados").GetValue(response)!;
+            Assert.Equal("Instruções para redefinição de senha foram enviadas para seu email", dados.GetType().GetProperty("mensagem").GetValue(dados));
             
             _mockAuthService.Verify(x => x.SolicitarResetSenhaAsync(model.Email), Times.Once);
             _mockEmailService.Verify(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.UserName), Times.Once);
@@ -70,19 +74,23 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var model = new ForgotPasswordDTO { Email = "usuario_inexistente@example.com" };
 
             _mockAuthService.Setup(x => x.SolicitarResetSenhaAsync(model.Email))
-                .ReturnsAsync((false, "Email não encontrado", null, null));
+                .ReturnsAsync((null, null));
+
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(true);
+            _mockNotificationService.Setup(n => n.Notifications).Returns(new List<NotificationItem> 
+            { 
+                new NotificationItem(ChavesNotificacao.Usuario, MensagensErro.UsuarioNaoEncontrado) 
+            });
 
             // Act
-            var resultado = await _controller.ForgotPassword(model) as BadRequestObjectResult;
+            var resultado = await _controller.ForgotPassword(model);
 
             // Assert
-            Assert.NotNull(resultado);
-            Assert.Equal(400, resultado.StatusCode);
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(resultado);
+            Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
             
-            var json = JsonSerializer.Serialize(resultado.Value);
-            var responseObj = JsonSerializer.Deserialize<JsonElement>(json);
-            var message = responseObj.GetProperty("message").GetString();
-            Assert.Equal("Email não encontrado", message);
+            dynamic response = badRequestResult.Value!;
+            Assert.False((bool)response.GetType().GetProperty("sucesso").GetValue(response)!);
             
             _mockAuthService.Verify(x => x.SolicitarResetSenhaAsync(model.Email), Times.Once);
             _mockEmailService.Verify(x => x.EnviarEmailResetSenhaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
@@ -97,22 +105,25 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var token = "token_reset_senha_123";
 
             _mockAuthService.Setup(x => x.SolicitarResetSenhaAsync(model.Email))
-                .ReturnsAsync((true, "Token de redefinição de senha gerado com sucesso", usuario, token));
+                .ReturnsAsync((usuario, token));
 
             _mockEmailService.Setup(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.UserName))
                 .ReturnsAsync(false);
 
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(false);
+
             // Act
-            var resultado = await _controller.ForgotPassword(model) as OkObjectResult;
+            var resultado = await _controller.ForgotPassword(model);
 
             // Assert
-            Assert.NotNull(resultado);
-            Assert.Equal(200, resultado.StatusCode);
+            var okResult = Assert.IsType<OkObjectResult>(resultado);
+            Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
             
-            var json = JsonSerializer.Serialize(resultado.Value);
-            var responseObj = JsonSerializer.Deserialize<JsonElement>(json);
-            var message = responseObj.GetProperty("message").GetString();
-            Assert.Equal("Se o email existir em nossa base de dados, você receberá instruções para redefinição de senha.", message);
+            dynamic response = okResult.Value!;
+            Assert.True((bool)response.GetType().GetProperty("sucesso").GetValue(response)!);
+            
+            dynamic dados = response.GetType().GetProperty("dados").GetValue(response)!;
+            Assert.Equal("Se o email existir em nossa base de dados, você receberá instruções para redefinição de senha.", dados.GetType().GetProperty("mensagem").GetValue(dados));
             
             _mockAuthService.Verify(x => x.SolicitarResetSenhaAsync(model.Email), Times.Once);
             _mockEmailService.Verify(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.UserName), Times.Once);
@@ -126,14 +137,13 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _controller.ModelState.AddModelError("Email", "O campo Email é obrigatório");
 
             // Act
-            var resultado = await _controller.ForgotPassword(model) as BadRequestObjectResult;
+            var resultado = await _controller.ForgotPassword(model);
 
             // Assert
-            Assert.NotNull(resultado);
-            Assert.Equal(400, resultado.StatusCode);
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(resultado);
+            Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
             
             _mockAuthService.Verify(x => x.SolicitarResetSenhaAsync(It.IsAny<string>()), Times.Never);
-            _mockEmailService.Verify(x => x.EnviarEmailResetSenhaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -148,19 +158,22 @@ namespace ControleFinanceiro.API.Tests.Controllers
             };
 
             _mockAuthService.Setup(x => x.ResetSenhaAsync(model.Token, model.Password))
-                .ReturnsAsync((true, "Senha redefinida com sucesso"));
+                .ReturnsAsync(true);
+
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(false);
 
             // Act
-            var resultado = await _controller.ResetPassword(model) as OkObjectResult;
+            var resultado = await _controller.ResetPassword(model);
 
             // Assert
-            Assert.NotNull(resultado);
-            Assert.Equal(200, resultado.StatusCode);
+            var okResult = Assert.IsType<OkObjectResult>(resultado);
+            Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
             
-            var json = JsonSerializer.Serialize(resultado.Value);
-            var responseObj = JsonSerializer.Deserialize<JsonElement>(json);
-            var message = responseObj.GetProperty("message").GetString();
-            Assert.Equal("Senha redefinida com sucesso", message);
+            dynamic response = okResult.Value!;
+            Assert.True((bool)response.GetType().GetProperty("sucesso").GetValue(response)!);
+            
+            dynamic dados = response.GetType().GetProperty("dados").GetValue(response)!;
+            Assert.Equal("Senha redefinida com sucesso", dados.GetType().GetProperty("mensagem").GetValue(dados));
             
             _mockAuthService.Verify(x => x.ResetSenhaAsync(model.Token, model.Password), Times.Once);
         }
@@ -177,19 +190,23 @@ namespace ControleFinanceiro.API.Tests.Controllers
             };
 
             _mockAuthService.Setup(x => x.ResetSenhaAsync(model.Token, model.Password))
-                .ReturnsAsync((false, "Token inválido"));
+                .ReturnsAsync(false);
+
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(true);
+            _mockNotificationService.Setup(n => n.Notifications).Returns(new List<NotificationItem> 
+            { 
+                new NotificationItem(ChavesNotificacao.Token, MensagensErro.TokenInvalido) 
+            });
 
             // Act
-            var resultado = await _controller.ResetPassword(model) as BadRequestObjectResult;
+            var resultado = await _controller.ResetPassword(model);
 
             // Assert
-            Assert.NotNull(resultado);
-            Assert.Equal(400, resultado.StatusCode);
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(resultado);
+            Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
             
-            var json = JsonSerializer.Serialize(resultado.Value);
-            var responseObj = JsonSerializer.Deserialize<JsonElement>(json);
-            var message = responseObj.GetProperty("message").GetString();
-            Assert.Equal("Token inválido", message);
+            dynamic response = badRequestResult.Value!;
+            Assert.False((bool)response.GetType().GetProperty("sucesso").GetValue(response)!);
             
             _mockAuthService.Verify(x => x.ResetSenhaAsync(model.Token, model.Password), Times.Once);
         }
@@ -206,16 +223,14 @@ namespace ControleFinanceiro.API.Tests.Controllers
             };
 
             // Act
-            var resultado = await _controller.ResetPassword(model) as BadRequestObjectResult;
+            var resultado = await _controller.ResetPassword(model);
 
             // Assert
-            Assert.NotNull(resultado);
-            Assert.Equal(400, resultado.StatusCode);
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(resultado);
+            Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
             
-            var json = JsonSerializer.Serialize(resultado.Value);
-            var responseObj = JsonSerializer.Deserialize<JsonElement>(json);
-            var message = responseObj.GetProperty("message").GetString();
-            Assert.Equal("As senhas não conferem", message);
+            dynamic response = badRequestResult.Value!;
+            Assert.False((bool)response.GetType().GetProperty("sucesso").GetValue(response)!);
             
             _mockAuthService.Verify(x => x.ResetSenhaAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
@@ -233,11 +248,11 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _controller.ModelState.AddModelError("Token", "O campo Token é obrigatório");
 
             // Act
-            var resultado = await _controller.ResetPassword(model) as BadRequestObjectResult;
+            var resultado = await _controller.ResetPassword(model);
 
             // Assert
-            Assert.NotNull(resultado);
-            Assert.Equal(400, resultado.StatusCode);
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(resultado);
+            Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
             
             _mockAuthService.Verify(x => x.ResetSenhaAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }

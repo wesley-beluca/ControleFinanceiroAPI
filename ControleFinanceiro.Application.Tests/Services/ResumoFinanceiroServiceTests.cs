@@ -1,10 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Services;
+using ControleFinanceiro.Domain.Constants;
 using ControleFinanceiro.Domain.Entities;
+using ControleFinanceiro.Domain.Interfaces;
 using ControleFinanceiro.Domain.Interfaces.Repositories;
-using FluentAssertions;
+using ControleFinanceiro.Domain.Notifications;
 using Moq;
 using Xunit;
 
@@ -13,42 +17,68 @@ namespace ControleFinanceiro.Application.Tests.Services
     public class ResumoFinanceiroServiceTests
     {
         private readonly Mock<ITransacaoRepository> _transacaoRepositoryMock;
+        private readonly Mock<INotificationService> _notificationServiceMock;
         private readonly ResumoFinanceiroService _service;
 
         public ResumoFinanceiroServiceTests()
         {
             _transacaoRepositoryMock = new Mock<ITransacaoRepository>();
-            _service = new ResumoFinanceiroService(_transacaoRepositoryMock.Object);
+            _notificationServiceMock = new Mock<INotificationService>();
+            
+            // Configuração padrão para o mock do INotificationService
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(false);
+            _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem>());
+            _notificationServiceMock.Setup(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>())).Verifiable();
+            _notificationServiceMock.Setup(n => n.Clear()).Verifiable();
+            
+            _service = new ResumoFinanceiroService(
+                _transacaoRepositoryMock.Object,
+                _notificationServiceMock.Object
+            );
         }
 
         [Fact]
-        public async Task GerarResumoFinanceiroAsync_QuandoDataInicioMaiorQueDataFim_DeveRetornarFalha()
+        public async Task GerarResumoFinanceiroAsync_QuandoDataInicioMaiorQueDataFim_DeveAdicionarNotificacao()
         {
             // Arrange
             var dataInicio = DateTime.Now;
             var dataFim = DateTime.Now.AddDays(-1);
+            
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
 
             // Act
             var result = await _service.GerarResumoFinanceiroAsync(dataInicio, dataFim);
 
             // Assert
-            result.Success.Should().BeFalse();
-            result.Message.Should().Contain("data inicial não pode ser maior que a data final");
+            Assert.Null(result);
+            
+            _notificationServiceMock.Verify(n => n.Clear(), Times.Once);
+            _notificationServiceMock.Verify(n => n.AddNotification(
+                ChavesNotificacao.DataInicio, 
+                MensagensErro.DataInicioMaiorQueFinal), 
+                Times.Once);
         }
 
         [Fact]
-        public async Task GerarResumoFinanceiroAsync_QuandoPeriodoMuitoLongo_DeveRetornarFalha()
+        public async Task GerarResumoFinanceiroAsync_QuandoPeriodoMuitoLongo_DeveAdicionarNotificacao()
         {
             // Arrange
             var dataInicio = DateTime.Now.AddDays(-400);
             var dataFim = DateTime.Now;
+            
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
 
             // Act
             var result = await _service.GerarResumoFinanceiroAsync(dataInicio, dataFim);
 
             // Assert
-            result.Success.Should().BeFalse();
-            result.Message.Should().Contain("não pode ser maior que 1 ano");
+            Assert.Null(result);
+            
+            _notificationServiceMock.Verify(n => n.Clear(), Times.Once);
+            _notificationServiceMock.Verify(n => n.AddNotification(
+                ChavesNotificacao.Periodo, 
+                MensagensErro.PeriodoInvalido), 
+                Times.Once);
         }
 
         [Fact]
@@ -60,17 +90,23 @@ namespace ControleFinanceiro.Application.Tests.Services
             
             _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                    .ReturnsAsync(new List<Transacao>());
+                                   
+            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(DateTime.MinValue, dataInicio.AddDays(-1), It.IsAny<Guid?>()))
+                                   .ReturnsAsync(new List<Transacao>());
 
             // Act
             var result = await _service.GerarResumoFinanceiroAsync(dataInicio, dataFim);
 
             // Assert
-            result.Success.Should().BeTrue();
-            result.Data.Should().NotBeNull();
-            result.Data.TotalReceitas.Should().Be(0);
-            result.Data.TotalDespesas.Should().Be(0);
-            result.Data.SaldoFinal.Should().Be(0);
-            result.Data.Periodo.Should().Be($"{dataInicio:dd/MM/yyyy} a {dataFim:dd/MM/yyyy}");
+            Assert.NotNull(result);
+            Assert.Equal(0, result.TotalReceitas);
+            Assert.Equal(0, result.TotalDespesas);
+            Assert.Equal(0, result.SaldoFinal);
+            Assert.Equal(dataInicio, result.DataInicio);
+            Assert.Equal(dataFim, result.DataFim);
+            
+            _notificationServiceMock.Verify(n => n.Clear(), Times.Once);
+            _notificationServiceMock.Verify(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -90,17 +126,21 @@ namespace ControleFinanceiro.Application.Tests.Services
             
             _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                    .ReturnsAsync(transacoes);
+                                   
+            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(DateTime.MinValue, dataInicio.AddDays(-1), It.IsAny<Guid?>()))
+                                   .ReturnsAsync(new List<Transacao>());
 
             // Act
             var result = await _service.GerarResumoFinanceiroAsync(dataInicio, dataFim);
 
             // Assert
-            result.Success.Should().BeTrue();
-            result.Data.Should().NotBeNull();
-            result.Data.TotalReceitas.Should().Be(3500m); // 3000 + 500
-            result.Data.TotalDespesas.Should().Be(1600m); // 1200 + 400
-            result.Data.SaldoFinal.Should().Be(1900m); // 3500 - 1600
-            result.Data.Periodo.Should().Be($"{dataInicio:dd/MM/yyyy} a {dataFim:dd/MM/yyyy}");
+            Assert.NotNull(result);
+            Assert.Equal(3500m, result.TotalReceitas); // 3000 + 500
+            Assert.Equal(1600m, result.TotalDespesas); // 1200 + 400
+            Assert.Equal(1900m, result.SaldoFinal); // 3500 - 1600
+            
+            _notificationServiceMock.Verify(n => n.Clear(), Times.Once);
+            _notificationServiceMock.Verify(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -119,16 +159,21 @@ namespace ControleFinanceiro.Application.Tests.Services
             
             _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                    .ReturnsAsync(transacoes);
+                                   
+            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(DateTime.MinValue, dataInicio.AddDays(-1), It.IsAny<Guid?>()))
+                                   .ReturnsAsync(new List<Transacao>());
 
             // Act
             var result = await _service.GerarResumoFinanceiroAsync(dataInicio, dataFim);
 
             // Assert
-            result.Success.Should().BeTrue();
-            result.Data.Should().NotBeNull();
-            result.Data.TotalReceitas.Should().Be(1000m);
-            result.Data.TotalDespesas.Should().Be(2000m); // 1500 + 500
-            result.Data.SaldoFinal.Should().Be(-1000m); // 1000 - 2000
+            Assert.NotNull(result);
+            Assert.Equal(1000m, result.TotalReceitas);
+            Assert.Equal(2000m, result.TotalDespesas); // 1500 + 500
+            Assert.Equal(-1000m, result.SaldoFinal); // 1000 - 2000
+            
+            _notificationServiceMock.Verify(n => n.Clear(), Times.Once);
+            _notificationServiceMock.Verify(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -150,16 +195,46 @@ namespace ControleFinanceiro.Application.Tests.Services
             
             _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
                                    .ReturnsAsync(transacoes);
+                                   
+            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(DateTime.MinValue, dataInicio.AddDays(-1), It.IsAny<Guid?>()))
+                                   .ReturnsAsync(new List<Transacao>());
 
             // Act
             var result = await _service.GerarResumoFinanceiroAsync(dataInicio, dataFim);
 
             // Assert
-            result.Success.Should().BeTrue();
-            result.Data.Should().NotBeNull();
-            result.Data.TotalReceitas.Should().Be(2000m);
-            result.Data.TotalDespesas.Should().Be(0m); // A despesa foi excluída
-            result.Data.SaldoFinal.Should().Be(2000m); // 2000 - 0
+            Assert.NotNull(result);
+            Assert.Equal(2000m, result.TotalReceitas);
+            Assert.Equal(0m, result.TotalDespesas); // A despesa foi excluída
+            Assert.Equal(2000m, result.SaldoFinal); // 2000 - 0
+            
+            _notificationServiceMock.Verify(n => n.Clear(), Times.Once);
+            _notificationServiceMock.Verify(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        }
+        
+        [Fact]
+        public async Task GerarResumoFinanceiroAsync_QuandoOcorreExcecao_DeveAdicionarNotificacao()
+        {
+            // Arrange
+            var dataInicio = DateTime.Now.AddDays(-10);
+            var dataFim = DateTime.Now;
+            
+            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
+                                   .ThrowsAsync(new Exception("Erro simulado"));
+                                   
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
+
+            // Act
+            var result = await _service.GerarResumoFinanceiroAsync(dataInicio, dataFim);
+
+            // Assert
+            Assert.Null(result);
+            
+            _notificationServiceMock.Verify(n => n.Clear(), Times.Once);
+            _notificationServiceMock.Verify(n => n.AddNotification(
+                ChavesNotificacao.Erro, 
+                It.Is<string>(s => s.Contains("Erro ao gerar resumo financeiro"))), 
+                Times.Once);
         }
     }
-} 
+}

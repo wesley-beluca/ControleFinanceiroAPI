@@ -95,7 +95,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             };
 
             _transacaoServiceMock.Setup(s => s.GetAllAsync(It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Ok(transacoes));
+                                .ReturnsAsync(transacoes);
 
             var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
@@ -104,10 +104,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var result = await controller.GetAll();
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<IEnumerable<TransacaoDTO>>>().Subject;
-            returnedResult.Success.Should().BeTrue();
-            returnedResult.Data.Should().HaveCount(2);
+            var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
+            okResult.Value.Should().BeAssignableTo<IEnumerable<TransacaoDTO>>();
+            ((IEnumerable<TransacaoDTO>)okResult.Value).Should().HaveCount(2);
         }
 
         [Fact]
@@ -116,7 +115,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             // Arrange
             var userId = Guid.NewGuid();
             _transacaoServiceMock.Setup(s => s.GetAllAsync(It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Fail("Erro ao buscar transações"));
+                                .ReturnsAsync((IEnumerable<TransacaoDTO>)null);
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
+            _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem> { new NotificationItem("Erro", "Erro ao buscar transações") });
 
             var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
@@ -125,10 +126,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var result = await controller.GetAll();
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<IEnumerable<TransacaoDTO>>>().Subject;
-            returnedResult.Success.Should().BeFalse();
-            returnedResult.Message.Should().Be("Erro ao buscar transações");
+            var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
+            badRequestResult.Value.Should().BeAssignableTo<List<NotificationItem>>();
+            ((List<NotificationItem>)badRequestResult.Value).Should().HaveCount(1);
         }
 
         [Fact]
@@ -136,30 +136,29 @@ namespace ControleFinanceiro.API.Tests.Controllers
         {
             // Arrange
             var userId = Guid.NewGuid();
-            var id = Guid.NewGuid();
+            var transacaoId = Guid.NewGuid();
             var transacao = new TransacaoDTO
             {
-                Id = id,
+                Id = transacaoId,
                 Descricao = "Transacao Teste",
                 Valor = 150m
             };
 
-            _transacaoServiceMock.Setup(s => s.GetByIdAsync(id, It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<TransacaoDTO>.Ok(transacao));
+            _transacaoServiceMock.Setup(s => s.GetByIdAsync(transacaoId, It.IsAny<Guid?>()))
+                                .ReturnsAsync(transacao);
 
             var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
 
             // Act
-            var result = await controller.GetById(id);
+            var result = await controller.GetById(transacaoId);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<TransacaoDTO>>().Subject;
-            returnedResult.Success.Should().BeTrue();
-            returnedResult.Data.Id.Should().Be(id);
-            returnedResult.Data.Descricao.Should().Be("Transacao Teste");
-            returnedResult.Data.Valor.Should().Be(150m);
+            var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
+            okResult.Value.Should().BeAssignableTo<TransacaoDTO>();
+            ((TransacaoDTO)okResult.Value).Id.Should().Be(transacaoId);
+            ((TransacaoDTO)okResult.Value).Descricao.Should().Be("Transacao Teste");
+            ((TransacaoDTO)okResult.Value).Valor.Should().Be(150m);
         }
 
         [Fact]
@@ -167,22 +166,23 @@ namespace ControleFinanceiro.API.Tests.Controllers
         {
             // Arrange
             var userId = Guid.NewGuid();
-            var id = Guid.NewGuid();
+            var transacaoId = Guid.NewGuid();
 
-            _transacaoServiceMock.Setup(s => s.GetByIdAsync(id, It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<TransacaoDTO>.Fail("Transação não encontrada"));
+            _transacaoServiceMock.Setup(s => s.GetByIdAsync(transacaoId, It.IsAny<Guid?>()))
+                                .ReturnsAsync((TransacaoDTO?)null);
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
+            _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem> { new NotificationItem("Erro", "Transação não encontrada") });
 
             var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
 
             // Act
-            var result = await controller.GetById(id);
+            var result = await controller.GetById(transacaoId);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<TransacaoDTO>>().Subject;
-            returnedResult.Success.Should().BeFalse();
-            returnedResult.Message.Should().Be("Transação não encontrada");
+            var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
+            badRequestResult.Value.Should().BeAssignableTo<List<NotificationItem>>();
+            ((List<NotificationItem>)badRequestResult.Value).Should().HaveCount(1);
         }
 
         [Fact]
@@ -199,7 +199,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             };
 
             _transacaoServiceMock.Setup(s => s.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Ok(transacoes));
+                                .ReturnsAsync(transacoes);
 
             var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
@@ -208,10 +208,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var result = await controller.GetByPeriodo(dataInicio, dataFim);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<IEnumerable<TransacaoDTO>>>().Subject;
-            returnedResult.Success.Should().BeTrue();
-            returnedResult.Data.Should().HaveCount(2);
+            var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
+            okResult.Value.Should().BeAssignableTo<IEnumerable<TransacaoDTO>>();
+            ((IEnumerable<TransacaoDTO>)okResult.Value).Should().HaveCount(2);
         }
 
         [Fact]
@@ -223,7 +222,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var dataFim = DateTime.Now.AddDays(-1); // Data inválida (fim antes do início)
 
             _transacaoServiceMock.Setup(s => s.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Fail("A data inicial não pode ser maior que a data final"));
+                .ReturnsAsync((IEnumerable<TransacaoDTO>?)null);
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
+            _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem> { new NotificationItem("Erro", "A data inicial não pode ser maior que a data final") });
 
             var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
@@ -232,10 +233,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var result = await controller.GetByPeriodo(dataInicio, dataFim);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<IEnumerable<TransacaoDTO>>>().Subject;
-            returnedResult.Success.Should().BeFalse();
-            returnedResult.Message.Should().Be("A data inicial não pode ser maior que a data final");
+            var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
+            badRequestResult.Value.Should().BeAssignableTo<List<NotificationItem>>();
+            ((List<NotificationItem>)badRequestResult.Value).Should().HaveCount(1);
         }
 
         [Fact]
@@ -251,7 +251,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             };
 
             _transacaoServiceMock.Setup(s => s.GetByTipoAsync(tipo, It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Ok(transacoes));
+                                .ReturnsAsync(transacoes);
 
             var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
@@ -260,10 +260,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var result = await controller.GetByTipo(tipo);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<IEnumerable<TransacaoDTO>>>().Subject;
-            returnedResult.Success.Should().BeTrue();
-            returnedResult.Data.Should().HaveCount(2);
+            var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
+            okResult.Value.Should().BeAssignableTo<IEnumerable<TransacaoDTO>>();
+            ((IEnumerable<TransacaoDTO>)okResult.Value).Should().HaveCount(2);
         }
 
         [Fact]
@@ -274,7 +273,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var tipoInvalido = 999;
 
             _transacaoServiceMock.Setup(s => s.GetByTipoAsync(tipoInvalido, It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<IEnumerable<TransacaoDTO>>.Fail("Tipo de transação inválido"));
+                                .ReturnsAsync((IEnumerable<TransacaoDTO>?)null);
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
+            _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem> { new NotificationItem("Erro", "Tipo de transação inválido") });
 
             var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object);
             ConfigureControllerContext(controller, userId);
@@ -283,10 +284,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var result = await controller.GetByTipo(tipoInvalido);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<IEnumerable<TransacaoDTO>>>().Subject;
-            returnedResult.Success.Should().BeFalse();
-            returnedResult.Message.Should().Be("Tipo de transação inválido");
+            var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
+            badRequestResult.Value.Should().BeAssignableTo<List<NotificationItem>>();
+            ((List<NotificationItem>)badRequestResult.Value).Should().HaveCount(1);
         }
 
         [Fact]
@@ -305,7 +305,8 @@ namespace ControleFinanceiro.API.Tests.Controllers
 
             var transacaoId = Guid.NewGuid();
             _transacaoServiceMock.Setup(s => s.AddAsync(It.IsAny<CreateTransacaoDTO>(), It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<Guid>.Ok(transacaoId));
+                                .ReturnsAsync(transacaoId);
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(false);
                                 
             // Configure user in UserManager
             var user = new Usuario { Id = usuarioId, UserName = "testuser@example.com" };
@@ -319,10 +320,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var result = await controller.Create(dto);
 
             // Assert
-            var createdAtActionResult = result.Result.Should().BeOfType<CreatedAtActionResult>().Subject;
-            var returnedResult = createdAtActionResult.Value.Should().BeAssignableTo<Result<Guid>>().Subject;
-            returnedResult.Success.Should().BeTrue();
-            returnedResult.Data.Should().Be(transacaoId);
+            var createdAtActionResult = result.Should().BeOfType<CreatedAtActionResult>().Subject;
             createdAtActionResult.ActionName.Should().Be(nameof(TransacoesController.GetById));
             createdAtActionResult.RouteValues["id"].Should().Be(transacaoId);
             
@@ -356,7 +354,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var result = await controller.Create(dto);
 
             // Assert
-            result.Result.Should().BeOfType<BadRequestObjectResult>();
+            var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
+            badRequestResult.Value.Should().BeAssignableTo<List<NotificationItem>>();
+            ((List<NotificationItem>)badRequestResult.Value).Should().HaveCount(1);
             
             // Verificar que o serviço não foi chamado
             _transacaoServiceMock.Verify(s => s.AddAsync(It.IsAny<CreateTransacaoDTO>(), It.IsAny<Guid?>()), Times.Never);
@@ -378,7 +378,8 @@ namespace ControleFinanceiro.API.Tests.Controllers
             };
 
             _transacaoServiceMock.Setup(s => s.UpdateAsync(id, It.IsAny<UpdateTransacaoDTO>(), It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<bool>.Ok(true));
+                                .ReturnsAsync(true);
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(false);
                                 
             // Configure user in UserManager
             var user = new Usuario { Id = usuarioId, UserName = "testuser@example.com" };
@@ -392,10 +393,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var result = await controller.Update(id, dto);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<bool>>().Subject;
-            returnedResult.Success.Should().BeTrue();
-            returnedResult.Data.Should().BeTrue();
+            var noContentResult = result.Should().BeOfType<NoContentResult>().Subject;
             
             // Verificar que o usuarioId foi passado para o serviço
             _transacaoServiceMock.Verify(s => s.UpdateAsync(id, It.IsAny<UpdateTransacaoDTO>(), usuarioId), Times.Once);
@@ -416,7 +414,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             };
 
             _transacaoServiceMock.Setup(s => s.UpdateAsync(id, It.IsAny<UpdateTransacaoDTO>(), It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<bool>.Fail("Transação não encontrada"));
+                                .ReturnsAsync(false);
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
+            _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem> { new NotificationItem("Erro", "Transação não encontrada") });
                                 
             // Configure user in UserManager
             var user = new Usuario { Id = usuarioId, UserName = "testuser@example.com" };
@@ -430,10 +430,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var result = await controller.Update(id, updateDto);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<bool>>().Subject;
-            returnedResult.Success.Should().BeFalse();
-            returnedResult.Message.Should().Be("Transação não encontrada");
+            var notFoundResult = result.Should().BeOfType<NotFoundObjectResult>().Subject;
+            notFoundResult.Value.Should().BeAssignableTo<List<NotificationItem>>();
+            ((List<NotificationItem>)notFoundResult.Value).Should().HaveCount(1);
         }
 
         [Fact]
@@ -459,7 +458,6 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 HttpContext = httpContext
             };
             
-            // Usar o controller com contexto de autenticação
             var controller = new TransacoesController(_transacaoServiceMock.Object, _userManagerMock.Object, _notificationServiceMock.Object)
             {
                 ControllerContext = controllerContext
@@ -478,7 +476,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
             var result = await controller.Update(id, dto);
 
             // Assert
-            result.Result.Should().BeOfType<BadRequestObjectResult>();
+            var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
+            badRequestResult.Value.Should().BeAssignableTo<List<NotificationItem>>();
+            ((List<NotificationItem>)badRequestResult.Value).Should().HaveCount(1);
             
             // Verificar que o serviço não foi chamado
             _transacaoServiceMock.Verify(s => s.UpdateAsync(It.IsAny<Guid>(), It.IsAny<UpdateTransacaoDTO>(), It.IsAny<Guid?>()), Times.Never);
@@ -490,17 +490,15 @@ namespace ControleFinanceiro.API.Tests.Controllers
             // Arrange
             var id = Guid.NewGuid();
 
-            _transacaoServiceMock.Setup(s => s.DeleteAsync(id))
-                                .ReturnsAsync(Result<bool>.Ok(true));
+            _transacaoServiceMock.Setup(s => s.DeleteAsync(id, It.IsAny<Guid?>()))
+                                .ReturnsAsync(true);
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(false);
 
             // Act
             var result = await _controller.Delete(id);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<bool>>().Subject;
-            returnedResult.Success.Should().BeTrue();
-            returnedResult.Data.Should().BeTrue();
+            var noContentResult = result.Should().BeOfType<NoContentResult>().Subject;
         }
 
         [Fact]
@@ -509,17 +507,18 @@ namespace ControleFinanceiro.API.Tests.Controllers
             // Arrange
             var id = Guid.NewGuid();
 
-            _transacaoServiceMock.Setup(s => s.DeleteAsync(id))
-                                .ReturnsAsync(Result<bool>.Fail("Transação não encontrada"));
+            _transacaoServiceMock.Setup(s => s.DeleteAsync(id, It.IsAny<Guid?>()))
+                                .ReturnsAsync(false);
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
+            _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem> { new NotificationItem("Erro", "Transação não encontrada") });
 
             // Act
             var result = await _controller.Delete(id);
 
             // Assert
-            var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-            var returnedResult = okResult.Value.Should().BeAssignableTo<Result<bool>>().Subject;
-            returnedResult.Success.Should().BeFalse();
-            returnedResult.Message.Should().Be("Transação não encontrada");
+            var notFoundResult = result.Should().BeOfType<NotFoundObjectResult>().Subject;
+            notFoundResult.Value.Should().BeAssignableTo<List<NotificationItem>>();
+            ((List<NotificationItem>)notFoundResult.Value).Should().HaveCount(1);
         }
 
         [Fact]
@@ -626,7 +625,8 @@ namespace ControleFinanceiro.API.Tests.Controllers
             
             var transacaoId = Guid.NewGuid();
             _transacaoServiceMock.Setup(s => s.AddAsync(It.IsAny<CreateTransacaoDTO>(), It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<Guid>.Ok(transacaoId));
+                                .ReturnsAsync(transacaoId);
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(false);
 
             // Act
             await controller.Create(dto);
@@ -672,7 +672,8 @@ namespace ControleFinanceiro.API.Tests.Controllers
             };
             
             _transacaoServiceMock.Setup(s => s.UpdateAsync(It.IsAny<Guid>(), It.IsAny<UpdateTransacaoDTO>(), It.IsAny<Guid?>()))
-                                .ReturnsAsync(Result<bool>.Ok(true));
+                                .ReturnsAsync(true);
+            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(false);
 
             // Act
             await controller.Update(id, dto);

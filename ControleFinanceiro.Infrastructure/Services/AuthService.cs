@@ -31,16 +31,28 @@ namespace ControleFinanceiro.Infrastructure.Services
 
         public async Task<(string token, Usuario usuario)> AuthenticateAsync(string username, string password)
         {
+            // Limpar notificações anteriores
+            _notificationService.Clear();
+            
             var usuario = await _usuarioRepository.ObterPorUsernameAsync(username);
 
-            if (usuario == null || !usuario.VerificarSenha(password))
+            if (usuario == null)
+            {
+                _notificationService.AddNotification("Login", "Nome de usuário ou senha inválidos");
                 return (null, null);
+            }
+            
+            if (!usuario.VerificarSenha(password))
+            {
+                _notificationService.AddNotification("Login", "Nome de usuário ou senha inválidos");
+                return (null, null);
+            }
                 
             var token = GerarJwtToken(usuario);
             return (token, usuario);
         }
 
-        public async Task<(bool sucesso, string mensagem, Usuario usuario)> RegisterAsync(string username, string email, string password)
+        public async Task<Usuario> RegisterAsync(string username, string email, string password)
         {
             // Limpar notificações anteriores
             _notificationService.Clear();
@@ -57,10 +69,10 @@ namespace ControleFinanceiro.Infrastructure.Services
                 _notificationService.AddNotification("Email", "Email já está em uso");
             }
             
-            // Se já existem notificações, retorna erro
+            // Se já existem notificações, retorna null
             if (_notificationService.HasNotifications)
             {
-                return (false, string.Join(", ", _notificationService.Notifications.Select(n => n.Message)), null);
+                return null;
             }
             
             try
@@ -73,34 +85,40 @@ namespace ControleFinanceiro.Infrastructure.Services
                 if (!notification.IsValid)
                 {
                     _notificationService.AddNotifications(notification);
-                    return (false, string.Join(", ", _notificationService.Notifications.Select(n => n.Message)), null);
+                    return null;
                 }
                 
                 await _usuarioRepository.AdicionarAsync(novoUsuario);
-                return (true, "Usuário registrado com sucesso", novoUsuario);
+                return novoUsuario;
             }
             catch (ArgumentException ex)
             {
                 _notificationService.AddNotification("Erro", ex.Message);
-                return (false, ex.Message, null);
+                return null;
             }
         }
 
-        public async Task<(bool sucesso, string mensagem, Usuario usuario, string token)> SolicitarResetSenhaAsync(string email)
+        public async Task<(Usuario usuario, string token)> SolicitarResetSenhaAsync(string email)
         {
+            // Limpar notificações anteriores
+            _notificationService.Clear();
+            
             var usuario = await _usuarioRepository.ObterPorEmailAsync(email);
             if (usuario == null)
-                return (false, "Email não encontrado", null, null);
+            {
+                _notificationService.AddNotification("Email", "Email não encontrado");
+                return (null, null);
+            }
 
             var token = usuario.GerarTokenResetSenha();
             usuario.ResetPasswordToken = token;
             usuario.ResetPasswordTokenExpiration = DateTime.Now.AddHours(2);
             await _usuarioRepository.AtualizarAsync(usuario);
 
-            return (true, "Token de redefinição de senha gerado com sucesso", usuario, token);
+            return (usuario, token);
         }
 
-        public async Task<(bool sucesso, string mensagem)> ResetSenhaAsync(string token, string novaSenha)
+        public async Task<bool> ResetSenhaAsync(string token, string novaSenha)
         {
             // Limpar notificações anteriores
             _notificationService.Clear();
@@ -110,14 +128,14 @@ namespace ControleFinanceiro.Infrastructure.Services
             if (usuario == null)
             {
                 _notificationService.AddNotification("Token", "Token inválido");
-                return (false, "Token inválido");
+                return false;
             }
 
             // Verificamos se o token está expirado
             if (usuario.ResetPasswordTokenExpiration < DateTime.Now)
             {
                 _notificationService.AddNotification("Token", "Token expirado");
-                return (false, "Token expirado");
+                return false;
             }
 
             // Validar a nova senha usando o Notification Pattern
@@ -127,11 +145,11 @@ namespace ControleFinanceiro.Infrastructure.Services
             if (!senhaRedefinida)
             {
                 _notificationService.AddNotification("Token", "Token expirado ou inválido");
-                return (false, "Token expirado ou inválido");
+                return false;
             }
 
             await _usuarioRepository.AtualizarAsync(usuario);
-            return (true, "Senha redefinida com sucesso");
+            return true;
         }
 
 

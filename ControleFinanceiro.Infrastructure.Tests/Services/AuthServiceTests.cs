@@ -1,5 +1,7 @@
+using ControleFinanceiro.Domain.Constants;
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
+using ControleFinanceiro.Domain.Interfaces.Repositories;
 using ControleFinanceiro.Domain.Notifications;
 using ControleFinanceiro.Infrastructure.Services;
 using Microsoft.AspNetCore.Identity;
@@ -7,10 +9,8 @@ using Microsoft.Extensions.Configuration;
 using Moq;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
-#nullable enable
 
 namespace ControleFinanceiro.Infrastructure.Tests.Services
 {
@@ -28,7 +28,7 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             _mockConfiguration = new Mock<IConfiguration>();
             _mockNotificationService = new Mock<INotificationService>();
             
-            // Setup for UserManager mock
+            // Setup para o mock do UserManager
             var userStoreMock = new Mock<IUserStore<Usuario>>();
             _mockUserManager = new Mock<UserManager<Usuario>>(userStoreMock.Object, null, null, null, null, null, null, null, null);
             
@@ -38,7 +38,7 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             
             // Configuração padrão para o mock do INotificationService
             _mockNotificationService.Setup(n => n.HasNotifications).Returns(false);
-            _mockNotificationService.Setup(n => n.Notifications).Returns(new List<NotificationItem>().AsReadOnly());
+            _mockNotificationService.Setup(n => n.Notifications).Returns(new List<NotificationItem>());
             _mockNotificationService.Setup(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>())).Verifiable();
             _mockNotificationService.Setup(n => n.Clear()).Verifiable();
             
@@ -59,45 +59,49 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
                 .ReturnsAsync(usuario);
             
             // Act
-            var resultado = await _authService.SolicitarResetSenhaAsync(email);
+            var (usuarioRetornado, token) = await _authService.SolicitarResetSenhaAsync(email);
             
             // Assert
-            Assert.True(resultado.sucesso);
-            Assert.Equal("Token de redefinição de senha gerado com sucesso", resultado.mensagem);
-            Assert.NotNull(resultado.usuario);
-            Assert.Equal(email, resultado.usuario.Email);
-            Assert.NotNull(resultado.token);
+            Assert.NotNull(usuarioRetornado);
+            Assert.NotNull(token);
+            Assert.Equal(email, usuarioRetornado.Email);
+            
+            _mockNotificationService.Verify(n => n.Clear(), Times.Once);
+            _mockNotificationService.Verify(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
             _mockUsuarioRepository.Verify(x => x.AtualizarAsync(It.IsAny<Usuario>()), Times.Once);
         }
         
         [Fact]
-        public async Task SolicitarResetSenhaAsync_ComEmailInvalido_RetornaFalha()
+        public async Task SolicitarResetSenhaAsync_ComEmailInvalido_AdicionaNotificacao()
         {
             // Arrange
             var email = "usuario_inexistente@example.com";
             
             _mockUsuarioRepository.Setup(x => x.ObterPorEmailAsync(email))
-                .ReturnsAsync((Usuario?)null);
+                .ReturnsAsync((Usuario)null);
+                
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(true);
             
             // Act
-            var resultado = await _authService.SolicitarResetSenhaAsync(email);
+            var (usuario, token) = await _authService.SolicitarResetSenhaAsync(email);
             
             // Assert
-            Assert.False(resultado.sucesso);
-            Assert.Equal("Email não encontrado", resultado.mensagem);
-            Assert.Null(resultado.usuario);
-            Assert.Null(resultado.token);
+            Assert.Null(usuario);
+            Assert.Null(token);
+            
+            _mockNotificationService.Verify(n => n.Clear(), Times.Once);
+            _mockNotificationService.Verify(n => n.AddNotification("Email", "Email não encontrado"), Times.Once);
             _mockUsuarioRepository.Verify(x => x.AtualizarAsync(It.IsAny<Usuario>()), Times.Never);
         }
         
         [Fact]
-        public async Task ResetSenhaAsync_ComTokenValido_RetornaSucesso()
+        public async Task ResetSenhaAsync_ComTokenValido_RetornaTrue()
         {
             // Arrange
             var token = "token_valido_123";
             var novaSenha = "NovaSenha123!";
             
-            // Criar um usuário real com token válido
+            // Criar um usuário com token válido
             var usuario = new Usuario("testuser", "usuario@example.com", "Password123!");
             
             // Usar reflection para definir as propriedades privadas
@@ -117,38 +121,44 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             var resultado = await _authService.ResetSenhaAsync(token, novaSenha);
             
             // Assert
-            Assert.True(resultado.sucesso);
-            Assert.Equal("Senha redefinida com sucesso", resultado.mensagem);
+            Assert.True(resultado);
+            
+            _mockNotificationService.Verify(n => n.Clear(), Times.Once);
+            _mockNotificationService.Verify(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
             _mockUsuarioRepository.Verify(x => x.AtualizarAsync(It.IsAny<Usuario>()), Times.Once);
         }
         
         [Fact]
-        public async Task ResetSenhaAsync_ComTokenInvalido_RetornaFalha()
+        public async Task ResetSenhaAsync_ComTokenInvalido_AdicionaNotificacao()
         {
             // Arrange
             var token = "token_invalido_123";
             var novaSenha = "NovaSenha123!";
             
             _mockUsuarioRepository.Setup(x => x.ObterPorResetTokenAsync(token))
-                .ReturnsAsync((Usuario?)null);
+                .ReturnsAsync((Usuario)null);
+                
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(true);
             
             // Act
             var resultado = await _authService.ResetSenhaAsync(token, novaSenha);
             
             // Assert
-            Assert.False(resultado.sucesso);
-            Assert.Equal("Token inválido", resultado.mensagem);
+            Assert.False(resultado);
+            
+            _mockNotificationService.Verify(n => n.Clear(), Times.Once);
+            _mockNotificationService.Verify(n => n.AddNotification("Token", "Token inválido"), Times.Once);
             _mockUsuarioRepository.Verify(x => x.AtualizarAsync(It.IsAny<Usuario>()), Times.Never);
         }
         
         [Fact]
-        public async Task ResetSenhaAsync_ComTokenExpirado_RetornaFalha()
+        public async Task ResetSenhaAsync_ComTokenExpirado_AdicionaNotificacao()
         {
             // Arrange
             var token = "token_expirado_123";
             var novaSenha = "NovaSenha123!";
             
-            // Criar um usuário real com token expirado
+            // Criar um usuário com token expirado
             var usuario = new Usuario("testuser", "usuario@example.com", "Password123!");
             
             // Usar reflection para definir as propriedades privadas
@@ -161,14 +171,213 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             
             _mockUsuarioRepository.Setup(x => x.ObterPorResetTokenAsync(token))
                 .ReturnsAsync(usuario);
+                
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(true);
             
             // Act
             var resultado = await _authService.ResetSenhaAsync(token, novaSenha);
             
             // Assert
-            Assert.False(resultado.sucesso);
-            Assert.Equal("Token expirado", resultado.mensagem);
+            Assert.False(resultado);
+            
+            _mockNotificationService.Verify(n => n.Clear(), Times.Once);
+            _mockNotificationService.Verify(n => n.AddNotification("Token", "Token expirado"), Times.Once);
             _mockUsuarioRepository.Verify(x => x.AtualizarAsync(It.IsAny<Usuario>()), Times.Never);
+        }
+        
+        [Fact]
+        public async Task ResetSenhaAsync_ComSenhaInvalida_AdicionaNotificacao()
+        {
+            // Arrange
+            var token = "token_valido_123";
+            var novaSenha = "NovaSenha123!";
+            
+            // Criar um usuário com token válido
+            var usuario = new Usuario("testuser", "usuario@example.com", "Password123!");
+            
+            // Configurar o mock para simular falha na redefinição de senha
+            var usuarioMock = new Mock<Usuario>("testuser", "usuario@example.com", "Password123!");
+            usuarioMock.Setup(u => u.RedefinirSenha(token, novaSenha)).Returns(false);
+            
+            // Usar reflection para definir as propriedades privadas
+            typeof(Usuario).GetProperty("ResetPasswordToken")
+                .SetValue(usuarioMock.Object, token);
+                
+            typeof(Usuario).GetProperty("ResetPasswordTokenExpiration")
+                .SetValue(usuarioMock.Object, DateTime.Now.AddHours(1)); // Token válido
+            
+            _mockUsuarioRepository.Setup(x => x.ObterPorResetTokenAsync(token))
+                .ReturnsAsync(usuarioMock.Object);
+                
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(true);
+            
+            // Act
+            var resultado = await _authService.ResetSenhaAsync(token, novaSenha);
+            
+            // Assert
+            Assert.False(resultado);
+            
+            _mockNotificationService.Verify(n => n.Clear(), Times.Once);
+            _mockNotificationService.Verify(n => n.AddNotification("Token", "Token expirado ou inválido"), Times.Once);
+            _mockUsuarioRepository.Verify(x => x.AtualizarAsync(It.IsAny<Usuario>()), Times.Never);
+        }
+        
+        [Fact]
+        public async Task AuthenticateAsync_ComCredenciaisValidas_RetornaToken()
+        {
+            // Arrange
+            var email = "usuario@example.com";
+            var senha = "Password123!";
+            var usuario = new Usuario("testuser", email, senha);
+            
+            _mockUsuarioRepository.Setup(x => x.ObterPorEmailAsync(email))
+                .ReturnsAsync(usuario);
+                
+            // Configurar o mock para validar a senha
+            var usuarioMock = new Mock<Usuario>("testuser", email, senha);
+            usuarioMock.Setup(u => u.ValidarSenha(senha)).Returns(true);
+            
+            _mockUsuarioRepository.Setup(x => x.ObterPorEmailAsync(email))
+                .ReturnsAsync(usuarioMock.Object);
+            
+            // Act
+            var token = await _authService.AuthenticateAsync(email, senha);
+            
+            // Assert
+            Assert.NotNull(token);
+            
+            _mockNotificationService.Verify(n => n.Clear(), Times.Once);
+            _mockNotificationService.Verify(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        }
+        
+        [Fact]
+        public async Task AuthenticateAsync_ComEmailInvalido_AdicionaNotificacao()
+        {
+            // Arrange
+            var email = "usuario_inexistente@example.com";
+            var senha = "Password123!";
+            
+            _mockUsuarioRepository.Setup(x => x.ObterPorEmailAsync(email))
+                .ReturnsAsync((Usuario)null);
+                
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(true);
+            
+            // Act
+            var token = await _authService.AuthenticateAsync(email, senha);
+            
+            // Assert
+            Assert.Null(token);
+            
+            _mockNotificationService.Verify(n => n.Clear(), Times.Once);
+            _mockNotificationService.Verify(n => n.AddNotification(ChavesNotificacao.Autenticacao, MensagensErro.CredenciaisInvalidas), Times.Once);
+        }
+        
+        [Fact]
+        public async Task AuthenticateAsync_ComSenhaInvalida_AdicionaNotificacao()
+        {
+            // Arrange
+            var email = "usuario@example.com";
+            var senha = "SenhaErrada123!";
+            var usuario = new Usuario("testuser", email, "Password123!");
+            
+            // Configurar o mock para validar a senha
+            var usuarioMock = new Mock<Usuario>("testuser", email, "Password123!");
+            usuarioMock.Setup(u => u.ValidarSenha(senha)).Returns(false);
+            
+            _mockUsuarioRepository.Setup(x => x.ObterPorEmailAsync(email))
+                .ReturnsAsync(usuarioMock.Object);
+                
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(true);
+            
+            // Act
+            var token = await _authService.AuthenticateAsync(email, senha);
+            
+            // Assert
+            Assert.Null(token);
+            
+            _mockNotificationService.Verify(n => n.Clear(), Times.Once);
+            _mockNotificationService.Verify(n => n.AddNotification(ChavesNotificacao.Autenticacao, MensagensErro.CredenciaisInvalidas), Times.Once);
+        }
+        
+        [Fact]
+        public async Task RegisterAsync_ComDadosValidos_RetornaUsuario()
+        {
+            // Arrange
+            var username = "novousuario";
+            var email = "novousuario@example.com";
+            var senha = "Senha123!";
+            
+            _mockUsuarioRepository.Setup(x => x.ObterPorEmailAsync(email))
+                .ReturnsAsync((Usuario)null);
+                
+            _mockUsuarioRepository.Setup(x => x.ObterPorUsernameAsync(username))
+                .ReturnsAsync((Usuario)null);
+                
+            _mockUsuarioRepository.Setup(x => x.AdicionarAsync(It.IsAny<Usuario>()))
+                .ReturnsAsync(new Usuario(username, email, senha));
+            
+            // Act
+            var usuario = await _authService.RegisterAsync(username, email, senha);
+            
+            // Assert
+            Assert.NotNull(usuario);
+            Assert.Equal(username, usuario.UserName);
+            Assert.Equal(email, usuario.Email);
+            
+            _mockNotificationService.Verify(n => n.Clear(), Times.Once);
+            _mockNotificationService.Verify(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            _mockUsuarioRepository.Verify(x => x.AdicionarAsync(It.IsAny<Usuario>()), Times.Once);
+        }
+        
+        [Fact]
+        public async Task RegisterAsync_ComEmailJaExistente_AdicionaNotificacao()
+        {
+            // Arrange
+            var username = "novousuario";
+            var email = "existente@example.com";
+            var senha = "Senha123!";
+            
+            _mockUsuarioRepository.Setup(x => x.ObterPorEmailAsync(email))
+                .ReturnsAsync(new Usuario("existente", email, "Password123!"));
+                
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(true);
+            
+            // Act
+            var usuario = await _authService.RegisterAsync(username, email, senha);
+            
+            // Assert
+            Assert.Null(usuario);
+            
+            _mockNotificationService.Verify(n => n.Clear(), Times.Once);
+            _mockNotificationService.Verify(n => n.AddNotification(ChavesNotificacao.Email, MensagensErro.EmailJaExiste), Times.Once);
+            _mockUsuarioRepository.Verify(x => x.AdicionarAsync(It.IsAny<Usuario>()), Times.Never);
+        }
+        
+        [Fact]
+        public async Task RegisterAsync_ComUsernameJaExistente_AdicionaNotificacao()
+        {
+            // Arrange
+            var username = "existente";
+            var email = "novousuario@example.com";
+            var senha = "Senha123!";
+            
+            _mockUsuarioRepository.Setup(x => x.ObterPorEmailAsync(email))
+                .ReturnsAsync((Usuario)null);
+                
+            _mockUsuarioRepository.Setup(x => x.ObterPorUsernameAsync(username))
+                .ReturnsAsync(new Usuario(username, "outro@example.com", "Password123!"));
+                
+            _mockNotificationService.Setup(n => n.HasNotifications).Returns(true);
+            
+            // Act
+            var usuario = await _authService.RegisterAsync(username, email, senha);
+            
+            // Assert
+            Assert.Null(usuario);
+            
+            _mockNotificationService.Verify(n => n.Clear(), Times.Once);
+            _mockNotificationService.Verify(n => n.AddNotification(ChavesNotificacao.Username, MensagensErro.UsernameJaExiste), Times.Once);
+            _mockUsuarioRepository.Verify(x => x.AdicionarAsync(It.IsAny<Usuario>()), Times.Never);
         }
     }
 }

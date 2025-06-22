@@ -1,5 +1,6 @@
 using ControleFinanceiro.Application.DTOs;
 using ControleFinanceiro.Application.Interfaces;
+using ControleFinanceiro.Domain.Constants;
 using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
 using ControleFinanceiro.Domain.Notifications;
@@ -17,56 +18,35 @@ namespace ControleFinanceiro.API.Controllers
     [Route("api/[controller]")]
     [Authorize]
 
-    public class ResumoFinanceiroController : ControllerBase
+    public class ResumoFinanceiroController : BaseController
     {
         private readonly IResumoFinanceiroService _resumoFinanceiroService;
-        private readonly UserManager<Usuario> _userManager;
-        private readonly INotificationService _notificationService;
 
-        public ResumoFinanceiroController(IResumoFinanceiroService resumoFinanceiroService, UserManager<Usuario> userManager, INotificationService notificationService)
+        public ResumoFinanceiroController(
+            IResumoFinanceiroService resumoFinanceiroService, 
+            UserManager<Usuario> userManager, 
+            INotificationService notificationService) : base(notificationService, userManager)
         {
             _resumoFinanceiroService = resumoFinanceiroService;
-            _userManager = userManager;
-            _notificationService = notificationService;
         }
 
         [HttpGet]
-        public async Task<ActionResult<Result<ResumoFinanceiroDTO>>> GetResumoFinanceiro(
+        public async Task<ActionResult> GetResumoFinanceiro(
             [FromQuery] DateTime dataInicio, 
             [FromQuery] DateTime dataFim)
         {
+            // Valida as datas
+            if (dataInicio > dataFim)
+            {
+                _notificationService.AddNotification(ChavesNotificacao.DataInicio, MensagensErro.DataInicioMaiorQueFinal);
+                return RespostaPersonalizada();
+            }
+            
             // Obtém o ID do usuário logado
             Guid? usuarioId = await ObterUsuarioIdLogadoAsync();
             
-            var resultado = await _resumoFinanceiroService.GerarResumoFinanceiroAsync(dataInicio, dataFim, usuarioId);
-            
-            if (!resultado.Success && _notificationService.HasNotifications)
-            {
-                return BadRequest(new { 
-                    message = "Ocorreram erros ao gerar o resumo financeiro", 
-                    errors = _notificationService.Notifications.Select(n => n.Message).ToList() 
-                });
-            }
-            
-            return Ok(resultado);
-        }
-        
-        /// <summary>
-        /// Obtém o ID do usuário logado usando o UserManager
-        /// </summary>
-        /// <returns>ID do usuário ou null se não estiver autenticado</returns>
-        private async Task<Guid?> ObterUsuarioIdLogadoAsync()
-        {
-            // Verifica se o usuário está autenticado
-            if (!User.Identity.IsAuthenticated)
-                return null;
-                
-            // Obtém o usuário atual usando o UserManager
-            var usuario = await _userManager.GetUserAsync(User);
-            if (usuario == null)
-                return null;
-                
-            return usuario.Id;
+            var resumo = await _resumoFinanceiroService.GerarResumoFinanceiroAsync(dataInicio, dataFim, usuarioId);
+            return RespostaPersonalizada(resumo);
         }
     }
 }

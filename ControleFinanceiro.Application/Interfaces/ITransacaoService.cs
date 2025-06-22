@@ -1,19 +1,48 @@
 using ControleFinanceiro.Application.DTOs;
-using ControleFinanceiro.Domain.Entities;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace ControleFinanceiro.Application.Interfaces
 {
+    /// <summary>
+    /// Interface para o serviço de transações
+    /// </summary>
     public interface ITransacaoService
     {
-        Task<Result<TransacaoDTO>> GetByIdAsync(Guid id, Guid? usuarioId = null);
-        Task<Result<IEnumerable<TransacaoDTO>>> GetAllAsync(Guid? usuarioId = null);
-        Task<Result<IEnumerable<TransacaoDTO>>> GetByPeriodoAsync(DateTime dataInicio, DateTime dataFim, Guid? usuarioId = null);
-        Task<Result<IEnumerable<TransacaoDTO>>> GetByTipoAsync(int tipo, Guid? usuarioId = null);
-        Task<Result<Guid>> AddAsync(CreateTransacaoDTO transacaoDto, Guid? usuarioId = null);
-        Task<Result<bool>> UpdateAsync(Guid id, UpdateTransacaoDTO transacaoDto, Guid? usuarioId = null);
-        Task<Result<bool>> DeleteAsync(Guid id);
+        /// <summary>
+        /// Obtém uma transação pelo ID
+        /// </summary>
+        Task<TransacaoDTO> GetByIdAsync(Guid id, Guid? usuarioId = null);
+        
+        /// <summary>
+        /// Obtém todas as transações
+        /// </summary>
+        Task<IEnumerable<TransacaoDTO>> GetAllAsync(Guid? usuarioId = null);
+        
+        /// <summary>
+        /// Obtém transações por período
+        /// </summary>
+        Task<IEnumerable<TransacaoDTO>> GetByPeriodoAsync(DateTime dataInicio, DateTime dataFim, Guid? usuarioId = null);
+        
+        /// <summary>
+        /// Obtém transações por tipo
+        /// </summary>
+        Task<IEnumerable<TransacaoDTO>> GetByTipoAsync(int tipo, Guid? usuarioId = null);
+        
+        /// <summary>
+        /// Adiciona uma nova transação
+        /// </summary>
+        Task<Guid> AddAsync(CreateTransacaoDTO transacaoDto, Guid? usuarioId = null);
+        
+        /// <summary>
+        /// Atualiza uma transação existente
+        /// </summary>
+        Task<bool> UpdateAsync(Guid id, UpdateTransacaoDTO transacaoDto, Guid? usuarioId = null);
+        
+        /// <summary>
+        /// Exclui uma transação
+        /// </summary>
+        Task<bool> DeleteAsync(Guid id, Guid? usuarioId = null);
     }
 }

@@ -92,6 +92,95 @@ Uma abordagem eficaz é combinar os dois padrões:
 2. Se a validação falhar (há notificações), lance uma exceção específica que contenha todas as notificações.
 3. Use exceções puras para erros técnicos e situações verdadeiramente excepcionais.
 
+## Middleware Global de Tratamento de Exceções
+
+Para complementar o Notification Pattern, implementamos um middleware global de tratamento de exceções que captura exceções não tratadas em qualquer ponto da aplicação e as converte em respostas padronizadas.
+
+### Implementação
+
+O middleware foi implementado na classe `ExceptionMiddleware` e registrado no pipeline HTTP da aplicação:
+
+```csharp
+// ExceptionMiddleware.cs
+public class ExceptionMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<ExceptionMiddleware> _logger;
+    private readonly INotificationService _notificationService;
+
+    public ExceptionMiddleware(
+        RequestDelegate next,
+        ILogger<ExceptionMiddleware> logger,
+        INotificationService notificationService)
+    {
+        _next = next;
+        _logger = logger;
+        _notificationService = notificationService;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await _next(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ocorreu um erro não tratado: {Message}", ex.Message);
+            await HandleExceptionAsync(context, ex);
+        }
+    }
+
+    private async Task HandleExceptionAsync(HttpContext context, Exception exception)
+    {
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+
+        _notificationService.Clear();
+        _notificationService.AddNotification(ChavesNotificacao.Erro, MensagensErro.ErroInterno);
+
+        var response = new
+        {
+            sucesso = false,
+            erros = new[] { new { Key = ChavesNotificacao.Erro, Message = MensagensErro.ErroInterno } }
+        };
+
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
+        var json = JsonSerializer.Serialize(response, options);
+        await context.Response.WriteAsync(json);
+    }
+}
+```
+
+### Registro no Pipeline
+
+O middleware é registrado no pipeline HTTP da aplicação através de uma extensão:
+
+```csharp
+// Program.cs
+app.UseGlobalExceptionHandler();
+```
+
+### Benefícios
+
+1. **Tratamento centralizado**: Todas as exceções não tratadas são capturadas em um único ponto.
+2. **Respostas padronizadas**: Todas as exceções são convertidas em respostas JSON padronizadas.
+3. **Logging automático**: Todas as exceções são automaticamente registradas no sistema de logs.
+4. **Segurança**: Detalhes sensíveis de exceções não são expostos para o cliente.
+5. **Integração com o Notification Pattern**: O middleware utiliza o serviço de notificação para manter a consistência com o resto da aplicação.
+
 ## Conclusão
 
-O equilíbrio entre o uso de exceções e o Notification Pattern pode levar a um código mais robusto, eficiente e amigável ao usuário. A chave é entender quando cada abordagem é mais apropriada e implementá-las de forma consistente em toda a aplicação.
+O equilíbrio entre o uso de exceções, o Notification Pattern e o middleware global de tratamento de exceções resulta em um código mais robusto, eficiente e amigável ao usuário. A combinação dessas abordagens proporciona:
+
+1. **Validação completa** para o usuário com todas as mensagens de erro de uma vez.
+2. **Tratamento consistente de erros** em toda a aplicação.
+3. **Respostas padronizadas** para todos os tipos de erro.
+4. **Melhor experiência do usuário** com mensagens de erro claras e em português.
+5. **Maior segurança** ao não expor detalhes internos de exceções.
+
+A chave é entender quando cada abordagem é mais apropriada e implementá-las de forma consistente em toda a aplicação.

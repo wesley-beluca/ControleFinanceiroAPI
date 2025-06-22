@@ -17,18 +17,20 @@ namespace ControleFinanceiro.Domain.Interfaces
         /// <summary>
         /// Registra um novo usuário
         /// </summary>
-        Task<(bool sucesso, string mensagem, Usuario usuario)> RegisterAsync(string username, string email, string password);
+        /// <returns>O usuário criado ou null em caso de erro</returns>
+        Task<Usuario> RegisterAsync(string username, string email, string password);
         
         /// <summary>
         /// Solicita um token para redefinição de senha
         /// </summary>
-        /// <returns>Tupla contendo: sucesso da operação, mensagem, usuário encontrado e token gerado</returns>
-        Task<(bool sucesso, string mensagem, Usuario usuario, string token)> SolicitarResetSenhaAsync(string email);
+        /// <returns>Tupla contendo o usuário encontrado e o token gerado, ou null em caso de erro</returns>
+        Task<(Usuario usuario, string token)> SolicitarResetSenhaAsync(string email);
         
         /// <summary>
         /// Redefine a senha usando um token
         /// </summary>
-        Task<(bool sucesso, string mensagem)> ResetSenhaAsync(string token, string novaSenha);
+        /// <returns>True se a senha foi redefinida com sucesso, False caso contrário</returns>
+        Task<bool> ResetSenhaAsync(string token, string novaSenha);
         
 
     }
