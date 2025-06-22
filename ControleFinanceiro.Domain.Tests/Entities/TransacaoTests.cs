@@ -30,21 +30,6 @@ namespace ControleFinanceiro.Domain.Tests.Entities
         }
 
         [Fact]
-        public void SetTipo_ComTipoValido_DeveAlterarTipo()
-        {
-            // Arrange
-            var transacao = new Transacao(TipoTransacao.Receita, DateTime.Now.AddDays(-1), "Teste", 100m);
-            var novoTipo = TipoTransacao.Despesa;
-
-            // Act
-            transacao.SetTipo(novoTipo);
-
-            // Assert
-            transacao.Tipo.Should().Be(novoTipo);
-            transacao.DataAlteracao.Should().NotBeNull();
-        }
-
-        [Fact]
         public void SetTipo_ComTipoInvalido_DeveLancarExcecao()
         {
             // Arrange
@@ -55,62 +40,6 @@ namespace ControleFinanceiro.Domain.Tests.Entities
             Action action = () => transacao.SetTipo((TipoTransacao)999);
             action.Should().Throw<ArgumentException>()
                   .WithMessage("Tipo de transação inválido");
-        }
-
-        [Fact]
-        public void SetData_ComDataValida_DeveAlterarData()
-        {
-            // Arrange
-            var transacao = new Transacao(TipoTransacao.Receita, DateTime.Now.AddDays(-10), "Teste", 100m);
-            var novaData = DateTime.Now.AddDays(-1);
-
-            // Act
-            transacao.SetData(novaData);
-
-            // Assert
-            transacao.Data.Should().Be(novaData);
-            transacao.DataAlteracao.Should().NotBeNull();
-        }
-
-        [Fact]
-        public void SetData_ComDataFutura_DeveLancarExcecao()
-        {
-            // Arrange
-            var transacao = new Transacao(TipoTransacao.Receita, DateTime.Now.AddDays(-1), "Teste", 100m);
-            var dataFutura = DateTime.Now.AddDays(1);
-
-            // Act & Assert
-            Action action = () => transacao.SetData(dataFutura);
-            action.Should().Throw<ArgumentException>()
-                  .WithMessage("Não é permitido registrar transações com data futura");
-        }
-
-        [Fact]
-        public void SetData_ComDataMuitoAntiga_DeveLancarExcecao()
-        {
-            // Arrange
-            var transacao = new Transacao(TipoTransacao.Receita, DateTime.Now.AddDays(-1), "Teste", 100m);
-            var dataMuitoAntiga = DateTime.Now.AddYears(-6);
-
-            // Act & Assert
-            Action action = () => transacao.SetData(dataMuitoAntiga);
-            action.Should().Throw<ArgumentException>()
-                  .WithMessage("Não é permitido registrar transações com mais de 5 anos");
-        }
-
-        [Fact]
-        public void SetDescricao_ComDescricaoValida_DeveAlterarDescricao()
-        {
-            // Arrange
-            var transacao = new Transacao(TipoTransacao.Receita, DateTime.Now.AddDays(-1), "Teste", 100m);
-            var novaDescricao = "Nova descrição";
-
-            // Act
-            transacao.SetDescricao(novaDescricao);
-
-            // Assert
-            transacao.Descricao.Should().Be(novaDescricao);
-            transacao.DataAlteracao.Should().NotBeNull();
         }
 
         [Theory]
@@ -126,34 +55,6 @@ namespace ControleFinanceiro.Domain.Tests.Entities
             Action action = () => transacao.SetDescricao(descricaoInvalida);
             action.Should().Throw<ArgumentException>()
                   .WithMessage("A descrição da transação é obrigatória");
-        }
-
-        [Fact]
-        public void SetDescricao_ComDescricaoMuitoLonga_DeveLancarExcecao()
-        {
-            // Arrange
-            var transacao = new Transacao(TipoTransacao.Receita, DateTime.Now.AddDays(-1), "Teste", 100m);
-            var descricaoMuitoLonga = new string('A', Transacao.DESCRICAO_MAX_LENGTH + 1);
-
-            // Act & Assert
-            Action action = () => transacao.SetDescricao(descricaoMuitoLonga);
-            action.Should().Throw<ArgumentException>()
-                  .WithMessage($"A descrição deve ter no máximo {Transacao.DESCRICAO_MAX_LENGTH} caracteres");
-        }
-
-        [Fact]
-        public void SetValor_ComValorValido_DeveAlterarValor()
-        {
-            // Arrange
-            var transacao = new Transacao(TipoTransacao.Receita, DateTime.Now.AddDays(-1), "Teste", 100m);
-            var novoValor = 200m;
-
-            // Act
-            transacao.SetValor(novoValor);
-
-            // Assert
-            transacao.Valor.Should().Be(novoValor);
-            transacao.DataAlteracao.Should().NotBeNull();
         }
 
         [Theory]

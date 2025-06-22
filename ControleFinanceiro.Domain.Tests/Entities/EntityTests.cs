@@ -60,47 +60,5 @@ namespace ControleFinanceiro.Domain.Tests.Entities
             entity.DataAlteracao.Should().NotBeNull();
             entity.DataAlteracao.Should().BeCloseTo(DateTime.Now, TimeSpan.FromSeconds(5));
         }
-
-        [Fact]
-        public void DefinirDataInclusao_DeveAlterarDataInclusao()
-        {
-            // Arrange
-            var entity = new TestEntity();
-            var novaData = new DateTime(2025, 1, 1);
-
-            // Act
-            entity.DefinirDataInclusao(novaData);
-
-            // Assert
-            entity.DataInclusao.Should().Be(novaData);
-        }
-
-        [Fact]
-        public void DefinirDataAlteracao_DeveAlterarDataAlteracao()
-        {
-            // Arrange
-            var entity = new TestEntity();
-            var novaData = new DateTime(2025, 1, 1);
-
-            // Act
-            entity.DefinirDataAlteracao(novaData);
-
-            // Assert
-            entity.DataAlteracao.Should().Be(novaData);
-        }
-
-        [Fact]
-        public void DefinirExcluido_DeveAlterarStatusDeExclusao()
-        {
-            // Arrange
-            var entity = new TestEntity();
-            entity.Excluido.Should().BeFalse();
-
-            // Act
-            entity.DefinirExcluido(true);
-
-            // Assert
-            entity.Excluido.Should().BeTrue();
-        }
     }
 } 

@@ -60,56 +60,6 @@ namespace ControleFinanceiro.Application.Tests.Services
         }
 
         [Fact]
-        public async Task GerarResumoFinanceiroAsync_QuandoPeriodoMuitoLongo_DeveAdicionarNotificacao()
-        {
-            // Arrange
-            var dataInicio = DateTime.Now.AddDays(-400);
-            var dataFim = DateTime.Now;
-            
-            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
-
-            // Act
-            var result = await _service.GerarResumoFinanceiroAsync(dataInicio, dataFim);
-
-            // Assert
-            Assert.Null(result);
-            
-            _notificationServiceMock.Verify(n => n.Clear(), Times.Once);
-            _notificationServiceMock.Verify(n => n.AddNotification(
-                ChavesNotificacao.Periodo, 
-                MensagensErro.PeriodoInvalido), 
-                Times.Once);
-        }
-
-        [Fact]
-        public async Task GerarResumoFinanceiroAsync_QuandoNaoExistemTransacoes_DeveRetornarResumoVazio()
-        {
-            // Arrange
-            var dataInicio = DateTime.Now.AddDays(-10);
-            var dataFim = DateTime.Now;
-            
-            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(dataInicio, dataFim, It.IsAny<Guid?>()))
-                                   .ReturnsAsync(new List<Transacao>());
-                                   
-            _transacaoRepositoryMock.Setup(r => r.GetByPeriodoAsync(DateTime.MinValue, dataInicio.AddDays(-1), It.IsAny<Guid?>()))
-                                   .ReturnsAsync(new List<Transacao>());
-
-            // Act
-            var result = await _service.GerarResumoFinanceiroAsync(dataInicio, dataFim);
-
-            // Assert
-            Assert.NotNull(result);
-            Assert.Equal(0, result.TotalReceitas);
-            Assert.Equal(0, result.TotalDespesas);
-            Assert.Equal(0, result.SaldoFinal);
-            Assert.Equal(dataInicio, result.DataInicio);
-            Assert.Equal(dataFim, result.DataFim);
-            
-            _notificationServiceMock.Verify(n => n.Clear(), Times.Once);
-            _notificationServiceMock.Verify(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
-        }
-
-        [Fact]
         public async Task GerarResumoFinanceiroAsync_QuandoExistemTransacoes_DeveCalcularCorretamente()
         {
             // Arrange

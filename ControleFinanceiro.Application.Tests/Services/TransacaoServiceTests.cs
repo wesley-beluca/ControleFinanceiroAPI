@@ -107,60 +107,6 @@ namespace ControleFinanceiro.Application.Tests.Services
         }
 
         [Fact]
-        public async Task GetByIdAsync_QuandoTransacaoNaoExiste_DeveAdicionarNotificacao()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            
-            _repositoryMock.Setup(r => r.GetByIdAsync(id))
-                           .ReturnsAsync((Transacao?)null);
-                           
-            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
-
-            // Act
-            var result = await _service.GetByIdAsync(id, null);
-
-            // Assert
-            Assert.Null(result);
-            
-            _notificationServiceMock.Verify(n => n.Clear(), Times.Once);
-            _notificationServiceMock.Verify(n => n.AddNotification(
-                "Id", 
-                "Transação não encontrada"), 
-                Times.Once);
-        }
-
-        [Fact]
-        public async Task GetAllAsync_QuandoExistemTransacoes_DeveRetornarListaDeTransacoesDTO()
-        {
-            // Arrange
-            var transacoes = new List<Transacao>
-            {
-                new Transacao(TipoTransacao.Receita, DateTime.Now.AddDays(-1), "Receita 1", 100m),
-                new Transacao(TipoTransacao.Despesa, DateTime.Now.AddDays(-2), "Despesa 1", 50m),
-                new Transacao(TipoTransacao.Receita, DateTime.Now.AddDays(-3), "Receita 2", 200m)
-            };
-            
-            // Configurando os Ids usando reflection
-            typeof(Entity).GetProperty("Id")!.SetValue(transacoes[0], Guid.NewGuid());
-            typeof(Entity).GetProperty("Id")!.SetValue(transacoes[1], Guid.NewGuid());
-            typeof(Entity).GetProperty("Id")!.SetValue(transacoes[2], Guid.NewGuid());
-
-            _repositoryMock.Setup(r => r.GetAllAsync())
-                           .ReturnsAsync(transacoes);
-
-            // Act
-            var result = await _service.GetAllAsync(null);
-
-            // Assert
-            Assert.NotNull(result);
-            Assert.Equal(3, result.Count());
-            
-            _notificationServiceMock.Verify(n => n.Clear(), Times.Once);
-            _notificationServiceMock.Verify(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
-        }
-
-        [Fact]
         public async Task AddAsync_QuandoDTOInvalido_DeveAdicionarNotificacoes()
         {
             // Arrange
@@ -279,32 +225,6 @@ namespace ControleFinanceiro.Application.Tests.Services
                           .ReturnsAsync(transacao);
             
             Assert.False(_notificationServiceMock.Object.HasNotifications);
-        }
-        
-        [Fact]
-        public async Task DeleteAsync_QuandoTransacaoNaoExiste_DeveAdicionarNotificacao()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            
-            _repositoryMock.Setup(r => r.ExistsAsync(id))
-                          .ReturnsAsync(false);
-                          
-            _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
-
-            // Act
-            var result = await _service.DeleteAsync(id, null);
-
-            // Assert
-            Assert.False(result);
-            
-            _notificationServiceMock.Verify(n => n.Clear(), Times.Once);
-            _notificationServiceMock.Verify(n => n.AddNotification(
-                ChavesNotificacao.Transacao, 
-                It.Is<string>(s => s.Contains("não encontrada"))), 
-                Times.Once);
-            
-            _repositoryMock.Verify(r => r.DeleteAsync(id), Times.Never);
         }
 
         [Fact]

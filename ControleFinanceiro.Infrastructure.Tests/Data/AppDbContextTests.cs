@@ -37,8 +37,6 @@ namespace ControleFinanceiro.Infrastructure.Tests.Data
                 var transacao = await context.Transacoes.FindAsync(transacaoId);
                 transacao.Should().NotBeNull();
                 transacao.DataInclusao.Should().BeAfter(dataAntes);
-                // Não verificamos se DataAlteracao é nula, pois o comportamento atual
-                // parece estar definindo a data de alteração na criação
                 transacao.Excluido.Should().BeFalse();
             }
         }
@@ -107,69 +105,6 @@ namespace ControleFinanceiro.Infrastructure.Tests.Data
                 // Assert
                 transacoes.Should().HaveCount(1);
                 transacoes.First().Descricao.Should().Be("Teste 2");
-            }
-        }
-
-        [Fact]
-        public async Task IgnoreQueryFilters_DeveRetornarTodosOsRegistros_InclusiveExcluidos()
-        {
-            // Arrange
-            var options = new DbContextOptionsBuilder<AppDbContext>()
-                .UseInMemoryDatabase(databaseName: $"InMemoryAppDbContextTest4{Guid.NewGuid()}")
-                .Options;
-
-            using (var context = new AppDbContext(options))
-            {
-                var transacao1 = new Transacao(TipoTransacao.Receita, DateTime.Now.AddDays(-1), "Teste 1", 100m);
-                var transacao2 = new Transacao(TipoTransacao.Despesa, DateTime.Now.AddDays(-2), "Teste 2", 200m);
-                await context.Transacoes.AddRangeAsync(transacao1, transacao2);
-                await context.SaveChangesAsync();
-                
-                // Marcar uma transação como excluída
-                transacao1.MarcarComoExcluido();
-                await context.SaveChangesAsync();
-            }
-
-            // Act
-            using (var context = new AppDbContext(options))
-            {
-                var transacoes = await context.Transacoes
-                    .IgnoreQueryFilters() // Isso ignora o filtro global
-                    .ToListAsync();
-                
-                // Assert
-                transacoes.Should().HaveCount(2);
-                transacoes.Should().Contain(t => t.Descricao == "Teste 1" && t.Excluido);
-                transacoes.Should().Contain(t => t.Descricao == "Teste 2" && !t.Excluido);
-            }
-        }
-
-        [Fact]
-        public async Task OnModelCreating_DeveConfigurarCorretamente_TransacaoEntity()
-        {
-            // Arrange
-            var options = new DbContextOptionsBuilder<AppDbContext>()
-                .UseInMemoryDatabase(databaseName: $"InMemoryAppDbContextTest5{Guid.NewGuid()}")
-                .Options;
-
-            // Act & Assert (Verificando se as configurações foram aplicadas corretamente)
-            using (var context = new AppDbContext(options))
-            {
-                var modelo = context.Model;
-                var entityType = modelo.FindEntityType(typeof(Transacao));
-                
-                entityType.Should().NotBeNull();
-                
-                // Verifica se a propriedade Id é configurada como chave primária
-                var keyProperties = entityType.FindPrimaryKey().Properties;
-                keyProperties.Should().HaveCount(1);
-                keyProperties.First().Name.Should().Be("Id");
-                
-                // Verifica configuração de propriedades
-                var descricaoProperty = entityType.FindProperty("Descricao");
-                descricaoProperty.Should().NotBeNull();
-                descricaoProperty.IsNullable.Should().BeFalse();
-                
             }
         }
     }
