@@ -36,6 +36,8 @@ namespace ControleFinanceiro.API.Tests.Controllers
             // Configuração padrão para o mock do INotificationService
             _notificationServiceMock.Setup(n => n.HasNotifications).Returns(false);
             _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem>());
+            _notificationServiceMock.Setup(n => n.Clear()).Verifiable();
+            _notificationServiceMock.Setup(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>())).Verifiable();
             
             _controller = new ResumoFinanceiroController(
                 _resumoFinanceiroServiceMock.Object, 
@@ -237,8 +239,12 @@ namespace ControleFinanceiro.API.Tests.Controllers
             _notificationServiceMock.Setup(n => n.HasNotifications).Returns(true);
             _notificationServiceMock.Setup(n => n.Notifications).Returns(new List<NotificationItem>
             {
-                new NotificationItem(ChavesNotificacao.Erro, "Erro ao processar o resumo financeiro")
+                new NotificationItem(ChavesNotificacao.Erro, MensagensErro.ErroInterno)
             });
+            
+            // Verificar que o serviço adiciona notificação correta
+            _notificationServiceMock.Setup(n => n.AddNotification(ChavesNotificacao.Erro, MensagensErro.ErroInterno)).Verifiable();
+            _notificationServiceMock.Setup(n => n.AddNotification(ChavesNotificacao.Erro, It.IsAny<string>())).Verifiable();
 
             // Act
             var result = await _controller.GetResumoFinanceiro(dataInicio, dataFim);

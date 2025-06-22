@@ -105,4 +105,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// Inicializa o banco de dados com dados de exemplo
+await app.InitializeDatabaseAsync();
+
 app.Run();

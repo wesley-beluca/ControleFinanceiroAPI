@@ -233,12 +233,12 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             _mockUsuarioRepository.Setup(x => x.ObterPorEmailAsync(email))
                 .ReturnsAsync(usuario);
                 
-            // Configurar o mock para validar a senha
-            var usuarioMock = new Mock<Usuario>("testuser", email, senha);
-            usuarioMock.Setup(u => u.ValidarSenha(senha)).Returns(true);
+            // Não precisamos mockar o método VerificarSenha pois ele não é virtual
+            // Vamos usar uma instância real de Usuario
+            var usuarioValido = new Usuario("testuser", email, senha);
             
-            _mockUsuarioRepository.Setup(x => x.ObterPorEmailAsync(email))
-                .ReturnsAsync(usuarioMock.Object);
+            _mockUsuarioRepository.Setup(x => x.ObterPorUsernameAsync(email))
+                .ReturnsAsync(usuarioValido);
             
             // Act
             var token = await _authService.AuthenticateAsync(email, senha);
@@ -280,12 +280,12 @@ namespace ControleFinanceiro.Infrastructure.Tests.Services
             var senha = "SenhaErrada123!";
             var usuario = new Usuario("testuser", email, "Password123!");
             
-            // Configurar o mock para validar a senha
-            var usuarioMock = new Mock<Usuario>("testuser", email, "Password123!");
-            usuarioMock.Setup(u => u.ValidarSenha(senha)).Returns(false);
+            // Não precisamos mockar o método VerificarSenha pois ele não é virtual
+            // Vamos usar uma instância real de Usuario com senha diferente
+            var usuarioComSenhaDiferente = new Usuario("testuser", email, "Password123!");
             
-            _mockUsuarioRepository.Setup(x => x.ObterPorEmailAsync(email))
-                .ReturnsAsync(usuarioMock.Object);
+            _mockUsuarioRepository.Setup(x => x.ObterPorUsernameAsync(email))
+                .ReturnsAsync(usuarioComSenhaDiferente);
                 
             _mockNotificationService.Setup(n => n.HasNotifications).Returns(true);
             

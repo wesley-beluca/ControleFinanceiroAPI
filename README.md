@@ -49,6 +49,19 @@ dotnet run --project ControleFinanceiro.API
 
 6. Acesse a documentação da API em: `https://localhost:5001/swagger`
 
+# Dados Iniciais do Sistema
+
+## Usuário Master
+
+O sistema é inicializado com um usuário master padrão que pode ser utilizado para acesso inicial à API:
+
+| Campo    | Valor                         |
+| -------- | ----------------------------- |
+| Username | master                        |
+| Email    | admin@controle-financeiro.com |
+| Senha    | senhamaster                   |
+| Nome     | Admin                         |
+
 ## Configuração de Credenciais Sensíveis
 
 Para proteger informações sensíveis como senhas SMTP, chaves de API e strings de conexão, o projeto utiliza User Secrets em ambiente de desenvolvimento e variáveis de ambiente em produção.

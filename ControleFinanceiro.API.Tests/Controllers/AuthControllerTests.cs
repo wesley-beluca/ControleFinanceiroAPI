@@ -5,6 +5,7 @@ using ControleFinanceiro.Domain.Entities;
 using ControleFinanceiro.Domain.Interfaces;
 using ControleFinanceiro.Domain.Notifications;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using System;
@@ -19,6 +20,7 @@ namespace ControleFinanceiro.API.Tests.Controllers
         private readonly Mock<IAuthService> _mockAuthService;
         private readonly Mock<IEmailService> _mockEmailService;
         private readonly Mock<INotificationService> _mockNotificationService;
+        private readonly Mock<UserManager<Usuario>> _mockUserManager;
         private readonly AuthController _controller;
 
         public AuthControllerTests()
@@ -30,8 +32,14 @@ namespace ControleFinanceiro.API.Tests.Controllers
             // Configuração padrão para o mock do INotificationService
             _mockNotificationService.Setup(n => n.HasNotifications).Returns(false);
             _mockNotificationService.Setup(n => n.Notifications).Returns(new List<NotificationItem>());
+            _mockNotificationService.Setup(n => n.Clear()).Verifiable();
+            _mockNotificationService.Setup(n => n.AddNotification(It.IsAny<string>(), It.IsAny<string>())).Verifiable();
             
-            _controller = new AuthController(_mockAuthService.Object, _mockEmailService.Object, _mockNotificationService.Object);
+            // Configuração do mock do UserManager
+            var store = new Mock<IUserStore<Usuario>>();
+            _mockUserManager = new Mock<UserManager<Usuario>>(store.Object, null, null, null, null, null, null, null, null);
+            
+            _controller = new AuthController(_mockAuthService.Object, _mockEmailService.Object, _mockNotificationService.Object, _mockUserManager.Object);
         }
 
         [Fact]
@@ -75,6 +83,8 @@ namespace ControleFinanceiro.API.Tests.Controllers
 
             _mockAuthService.Setup(x => x.SolicitarResetSenhaAsync(model.Email))
                 .ReturnsAsync((null, null));
+                
+            // Simular que o serviço adicionou notificações
 
             _mockNotificationService.Setup(n => n.HasNotifications).Returns(true);
             _mockNotificationService.Setup(n => n.Notifications).Returns(new List<NotificationItem> 
@@ -109,6 +119,9 @@ namespace ControleFinanceiro.API.Tests.Controllers
 
             _mockEmailService.Setup(x => x.EnviarEmailResetSenhaAsync(model.Email, token, usuario.UserName))
                 .ReturnsAsync(false);
+                
+            // Simular que o serviço de email adicionou notificação
+            _mockNotificationService.Setup(n => n.AddNotification(ChavesNotificacao.Email, MensagensErro.ErroEnvioEmail)).Verifiable();
 
             _mockNotificationService.Setup(n => n.HasNotifications).Returns(false);
 
@@ -246,6 +259,8 @@ namespace ControleFinanceiro.API.Tests.Controllers
                 ConfirmPassword = "" 
             };
             _controller.ModelState.AddModelError("Token", "O campo Token é obrigatório");
+            
+            // Verificar que o ModelState inválido adiciona notificações via ValidarModelState
 
             // Act
             var resultado = await _controller.ResetPassword(model);
